@@ -20,21 +20,56 @@
 
 ## Why this exists
 
-Commenting on LinkedIn at any meaningful volume costs ~30 minutes a day and produces sludge. Templates get ignored. Generic praise gets you typed as a botted account. Auto-publishers get accounts flagged or banned. The honest middle path — drafted comments in your real voice, manually approved before they go live — doesn't exist as a product.
+LinkedIn's feed is mostly slop. AI-generated motivational posts. Engagement-bait threads. Recycled hot takes. Broetry stacks. "I just got rejected from 47 jobs and here's what I learned" carousels. Filtering that manually for posts actually worth a reply means scrolling 30-40 minutes a day, most of which gets you nothing.
 
-This builds it. End-to-end. With no daemon, no auto-publish, no surprises.
+The obvious response is full automation. But that makes things worse. Auto-comment bots turn LinkedIn into bots talking to bots, and your account becomes one of them. The whole point of commenting is that someone reads it and thinks "this person actually has a take." That breaks the second the comment is something a script generated and pushed without you ever seeing it.
+
+So this tool sits in the middle. **You** define what posts matter (keywords, authors to focus on, authors to skip). **The tool** scrapes your feed, applies your filters, drafts comments in your voice, and queues them in Notion. **You** read each post, sanity-check the draft, edit if the model missed something, then publish the batch.
+
+10-15 minutes instead of 30-40. Same engagement output. You know exactly what went out under your name, every time.
+
+No daemon. No auto-publish. No "5-minute undo" magic. Every comment passes through your eyes before it's live.
 
 ## What it does
 
 You, the worker, and Notion form a three-step loop:
 
-1. **You run `npm run scan`.** A real Chrome window opens, scrolls your LinkedIn feed, and pulls 20-30 recent posts. They're filtered (English only, not job listings, not reposts, not authors you've already commented on this fortnight, etc.). Survivors get drafted in **your** voice via Claude in a single batched call. Each draft is validated against ~12 anti-cope guardrails (no em-dashes, no "great post" openers, no antithesis structures, no exclamation marks, no hashtags, etc.). Survivors land in your Notion DB as `pending`.
+1. **You run `npm run scan`.** A real Chrome window opens, scrolls your LinkedIn feed, and pulls 20-30 recent posts. They're filtered against your targeting rules (keywords / author allowlist / author blacklist) plus the universal cleanup filters (English only, not job listings, not reposts, not authors you've already commented on this fortnight, not posts drowning in 150+ comments, etc.). Survivors get drafted in **your** voice via Claude in a single batched call. Each draft is validated against ~12 anti-cope guardrails (no em-dashes, no "great post" openers, no antithesis structures, no exclamation marks, no hashtags, etc.). Survivors land in your Notion DB as `pending`.
 
-2. **You approve in Notion.** Open the DB on web, mobile, or via the Claude app + Notion MCP. Read each draft, edit if needed, flip status to `approved`. Or skip / archive what you don't want.
+2. **You approve in Notion.** Open the DB on web, mobile, or via the Claude app + Notion MCP. Read each post, read the draft, tweak the wording if needed, flip status to `approved`. Or skip / archive what you don't want to engage with.
 
 3. **You run `npm run publish`.** The worker reads everything you approved, opens Chrome again, and for each row: pre-flight account-health check, navigate to the post, click Like, type the comment at human speed, submit, verify it published, archive the row. Cooldowns between publishes are 30-120s. Daily cap ramps from 5 to 15 over a week.
 
 Nothing publishes without your explicit approval. Nothing runs without you typing a command. There is no daemon.
+
+## Targeting (what gets drafted)
+
+Four optional env vars in `.env` control which posts make it into the queue. All are pipe-separated, all are case-insensitive substring matches. Leave them blank to draft for everything that survives the universal filters.
+
+| Var | Effect |
+|---|---|
+| `ONLY_AUTHORS` | Whitelist. If set, ONLY draft for posts from these authors. Use for "I want to engage with these specific 30 people." |
+| `SKIP_AUTHORS` | Blacklist. Never draft for these authors. Use for hustle bros, recruiters in your niche, motivational-quote bots. |
+| `ONLY_KEYWORDS` | Topic whitelist. If set, ONLY draft for posts whose text contains at least one of these. Use to focus on your wheelhouse. |
+| `SKIP_KEYWORDS` | Topic blacklist. Skip posts containing any of these. Use to filter out engagement-bait phrases or topics you don't want to touch. |
+
+Example `.env` for an indie founder writing about B2B SaaS:
+
+```env
+ONLY_KEYWORDS=b2b saas|gtm|pricing|onboarding|founder-led sales|product-market fit
+SKIP_KEYWORDS=hot take|grateful to announce|game-changer|crypto|nft|web3
+SKIP_AUTHORS=hustle bro|crypto guru|cold outreach guru
+```
+
+The filters apply before the Claude draft call, so they save tokens and time. Reasons surface in the scan summary so you can see what got skipped and why:
+
+```
+Filtered/skipped: 18
+  6× post does not match ONLY_KEYWORDS
+  4× author on SKIP_AUTHORS list
+  3× post matches SKIP_KEYWORDS
+  ...
+```
 
 ## What makes it safe
 
@@ -77,16 +112,17 @@ npm run status              # phase, today's count vs cap, paused state, queue c
 ## Table of contents
 
 1. [How it works](#how-it-works)
-2. [Edge cases & guardrails](#edge-cases--guardrails)
-3. [Voice (your own, generated)](#voice-your-own-generated)
-4. [Account safety](#account-safety)
-5. [Failure modes & recovery](#failure-modes--recovery)
-6. [Notion DB schema](#notion-db-schema)
-7. [Setup](#setup)
-8. [Project layout](#project-layout)
-9. [Stack](#stack)
-10. [Out of scope](#out-of-scope)
-11. [Optional skill wrapper](#optional-skill-wrapper)
+2. [Targeting (what gets drafted)](#targeting-what-gets-drafted)
+3. [Edge cases & guardrails](#edge-cases--guardrails)
+4. [Voice (your own, generated)](#voice-your-own-generated)
+5. [Account safety](#account-safety)
+6. [Failure modes & recovery](#failure-modes--recovery)
+7. [Notion DB schema](#notion-db-schema)
+8. [Setup](#setup)
+9. [Project layout](#project-layout)
+10. [Stack](#stack)
+11. [Out of scope](#out-of-scope)
+12. [Optional skill wrapper](#optional-skill-wrapper)
 
 ---
 
@@ -143,9 +179,15 @@ Three concentric defenses. A post must pass **all of them** to get published.
 | Drowned post | `commentCount > 150` | Your comment vanishes in the noise |
 | Already seen | `seen_posts` SQLite | Cross-run dedup, prevents re-queue |
 | Same author <14 days | `author_history` SQLite | Looks robotic, may flag profile |
+| `SKIP_AUTHORS` match | env var, substring | You don't want to engage with them |
+| Not in `ONLY_AUTHORS` | env var, substring | If allowlist is set and author isn't on it |
+| `SKIP_KEYWORDS` match | env var, substring on post text | Off-topic / engagement bait |
+| No `ONLY_KEYWORDS` match | env var, substring on post text | If topic allowlist is set and post doesn't match |
 | Same author this scan | in-batch `Set<author>` | Within-run dedup |
 | Same author already pending | `listOpenAuthors()` Notion query | Approved/pending row exists, don't queue twice |
 | Non-English post | `detectEnglish()` heuristic | <75% Latin chars OR zero English stopwords |
+
+See [Targeting](#targeting-what-gets-drafted) for how to configure the four env-var filters.
 
 ### Layer 2 — Drafter output validation (`guardrails.ts`, before Notion write)
 

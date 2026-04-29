@@ -15,6 +15,11 @@ export const NOTION_DB_ID = required('NOTION_DB_ID');
 export const DRY_RUN = process.env.DRY_RUN === '1';
 export const PAUSED_ENV = process.env.LINKEDIN_PAUSE === '1';
 
+export const ONLY_AUTHORS = parseList('ONLY_AUTHORS');
+export const SKIP_AUTHORS = parseList('SKIP_AUTHORS');
+export const ONLY_KEYWORDS = parseList('ONLY_KEYWORDS');
+export const SKIP_KEYWORDS = parseList('SKIP_KEYWORDS');
+
 export const PHASES = [
   { days: 3, dailyCap: 10, minGapMs: 45_000, maxGapMs: 120_000, maxScan: 20 },
   { days: 7, dailyCap: 10, minGapMs: 30_000, maxGapMs: 90_000, maxScan: 25 },
@@ -41,4 +46,8 @@ function required(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env var: ${name}`);
   return v;
+}
+
+function parseList(name: string): string[] {
+  return (process.env[name] ?? '').split('|').map(s => s.trim().toLowerCase()).filter(Boolean);
 }

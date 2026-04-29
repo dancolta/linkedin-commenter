@@ -8,7 +8,10 @@ import { createPending, listOpenAuthors } from './notion/queue.js';
 import {
   isPostSeen, markPostSeen, commentedAuthorRecently, getRecentComments, getFirstRunAt,
 } from './cache/sqlite.js';
-import { currentPhase, DRY_RUN, PAUSED_ENV, NOTION_DB_ID } from './config.js';
+import {
+  currentPhase, DRY_RUN, PAUSED_ENV, NOTION_DB_ID,
+  ONLY_AUTHORS, SKIP_AUTHORS, ONLY_KEYWORDS, SKIP_KEYWORDS,
+} from './config.js';
 
 async function main() {
   if (PAUSED_ENV) { console.log('LINKEDIN_PAUSE=1 — exiting'); process.exit(0); }
@@ -60,6 +63,11 @@ async function main() {
     if (isPostSeen(post.postUrl)) { skip('already seen'); continue; }
     if (commentedAuthorRecently(post.author, 14)) { skip('same author <14 days'); continue; }
     const authorKey = post.author.toLowerCase();
+    if (SKIP_AUTHORS.length && SKIP_AUTHORS.some(a => authorKey.includes(a))) { skip('author on SKIP_AUTHORS list'); continue; }
+    if (ONLY_AUTHORS.length && !ONLY_AUTHORS.some(a => authorKey.includes(a))) { skip('author not on ONLY_AUTHORS list'); continue; }
+    const textKey = post.text.toLowerCase();
+    if (SKIP_KEYWORDS.length && SKIP_KEYWORDS.some(k => textKey.includes(k))) { skip('post matches SKIP_KEYWORDS'); continue; }
+    if (ONLY_KEYWORDS.length && !ONLY_KEYWORDS.some(k => textKey.includes(k))) { skip('post does not match ONLY_KEYWORDS'); continue; }
     if (inBatchAuthors.has(authorKey)) { skip('duplicate author in this scan'); continue; }
     if (openAuthors.has(authorKey)) { skip('author already pending/approved in Notion'); continue; }
     const lang = detectEnglish(post.text);
