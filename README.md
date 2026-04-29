@@ -13,8 +13,18 @@
   <img alt="Node" src="https://img.shields.io/badge/Node-%3E=20-339933?logo=node.js&logoColor=white">
   <img alt="Playwright" src="https://img.shields.io/badge/Playwright-headed-2EAD33?logo=playwright&logoColor=white">
   <img alt="Notion" src="https://img.shields.io/badge/Notion-queue-000000?logo=notion&logoColor=white">
-  <img alt="Visibility" src="https://img.shields.io/badge/visibility-private-red">
+  <img alt="Status" src="https://img.shields.io/badge/status-personal_use_only-orange">
 </p>
+
+---
+
+> **⚠️ Before you use this — read the disclaimer**
+>
+> LinkedIn's [User Agreement §8.2](https://www.linkedin.com/legal/user-agreement) prohibits scraping, automation, and any "software, devices, scripts, robots, or other means" interacting with the platform. **This tool does that.** Manual approval and human-paced typing keep detection low, and many people run tools like this for months without issue, but the risk is real and it's on you. Account restrictions, pauses, or bans are not the repo's problem.
+>
+> Use it for **personal engagement on accounts you own.** Not for mass outreach, not for spam, not for managing accounts on behalf of clients without their explicit consent. Provided as-is, no warranty, no support.
+>
+> By cloning, installing, or running this code you accept these terms.
 
 ---
 
