@@ -13,18 +13,8 @@
   <img alt="Node" src="https://img.shields.io/badge/Node-%3E=20-339933?logo=node.js&logoColor=white">
   <img alt="Playwright" src="https://img.shields.io/badge/Playwright-headed-2EAD33?logo=playwright&logoColor=white">
   <img alt="Notion" src="https://img.shields.io/badge/Notion-queue-000000?logo=notion&logoColor=white">
-  <img alt="Status" src="https://img.shields.io/badge/status-personal_use_only-orange">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
-
----
-
-> **⚠️ Before you use this — read the disclaimer**
->
-> LinkedIn's [User Agreement §8.2](https://www.linkedin.com/legal/user-agreement) prohibits scraping, automation, and any "software, devices, scripts, robots, or other means" interacting with the platform. **This tool does that.** Manual approval and human-paced typing keep detection low, and many people run tools like this for months without issue, but the risk is real and it's on you. Account restrictions, pauses, or bans are not the repo's problem.
->
-> Use it for **personal engagement on accounts you own.** Not for mass outreach, not for spam, not for managing accounts on behalf of clients without their explicit consent. Provided as-is, no warranty, no support.
->
-> By cloning, installing, or running this code you accept these terms.
 
 ---
 
@@ -133,6 +123,8 @@ npm run status              # phase, today's count vs cap, paused state, queue c
 10. [Stack](#stack)
 11. [Out of scope](#out-of-scope)
 12. [Optional skill wrapper](#optional-skill-wrapper)
+13. [License](#license)
+14. [Disclaimer](#disclaimer)
 
 ---
 
@@ -584,3 +576,19 @@ If output contains `ACCOUNT PAUSED`, `RESTRICTION`, `CAPTCHA`, `LOGIN_REQUIRED`,
 ```
 
 After saving, the skill becomes available to Claude Code as `/linkedin-comment run|post|status|setup`. Restart Claude Code if it doesn't show up immediately.
+
+---
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+---
+
+## Disclaimer
+
+LinkedIn's [User Agreement §8.2](https://www.linkedin.com/legal/user-agreement) prohibits scraping, automation, and any *"software, devices, scripts, robots, or other means"* interacting with the platform. **This tool does that.** Manual approval and human-paced typing keep detection low, and many people run tools like this for months without issue, but the risk is real and it's on you. Account restrictions, pauses, or bans are not the repo's problem.
+
+Use it for **personal engagement on accounts you own.** Not for mass outreach, not for spam, not for managing accounts on behalf of clients without their explicit consent. Provided as-is, no warranty, no support.
+
+By cloning, installing, or running this code you accept these terms.
