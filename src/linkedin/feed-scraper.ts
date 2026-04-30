@@ -29,66 +29,23 @@ export async function scrapeFeed(page: Page, max: number): Promise<ScrapedPost[]
   const maxScrolls = 60;
 
   while (posts.length < max && scrolls < maxScrolls) {
-    const found: any[] = (await page.evaluate(`(() => {
-      function decodeUrnFromPrefix(b64) {
-        try {
-          const norm = b64.replace(/-/g, '+').replace(/_/g, '/');
-          const padded = norm + '='.repeat((4 - norm.length % 4) % 4);
-          const bin = atob(padded);
-          if (bin.charCodeAt(0) !== 0x0a || bin.charCodeAt(2) !== 0x08) return null;
-          let val = 0n, shift = 0n;
-          for (let i = 3; i < bin.length; i++) {
-            const byte = bin.charCodeAt(i);
-            val |= BigInt(byte & 0x7f) << shift;
-            if ((byte & 0x80) === 0) return (val >> 1n).toString();
-            shift += 7n;
-          }
-          return null;
-        } catch (e) { return null; }
-      }
+    const found: any[] = (await page.evaluate(`(async () => {
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-      const out = [];
-      const feed = document.querySelector('[data-testid="mainFeed"]');
-      if (!feed) return out;
-
-      const items = feed.querySelectorAll('[role="listitem"]');
-      items.forEach(item => {
-        // Author from aria-label
+      function extractData(item) {
         const ctrlMenu = item.querySelector('[aria-label^="Open control menu for post by "]');
         const hideBtn = item.querySelector('[aria-label^="Hide post by "]');
         const aria = (ctrlMenu && ctrlMenu.getAttribute('aria-label')) || (hideBtn && hideBtn.getAttribute('aria-label')) || '';
         let author = '';
-        let m = aria.match(/^(?:Open control menu for post by|Hide post by)\\s+(.+?)$/);
+        const m = aria.match(/^(?:Open control menu for post by|Hide post by)\\s+(.+?)$/);
         if (m) author = m[1].replace(/^[^\\p{L}\\p{N}]+/u, '').trim();
-        if (!author) return;
 
-        // URN: try (a) decode from replaceableCommentTools prefix, (b) explicit comment URN
-        let urn = null;
-        const componentEls = item.querySelectorAll('[componentkey]');
-        for (const el of componentEls) {
-          const ck = el.getAttribute('componentkey') || '';
-          // Method A: protobuf-encoded prefix on replaceableCommentTools
-          const pbm = ck.match(/^([A-Za-z0-9+/_=-]+)-replaceableCommentTools/);
-          if (pbm) {
-            const decoded = decodeUrnFromPrefix(pbm[1]);
-            if (decoded) { urn = decoded; break; }
-          }
-          // Method B: explicit URN in comment componentkey
-          const um = ck.match(/urn:li:activity:(\\d+)/);
-          if (um) { urn = um[1]; break; }
-        }
-        if (!urn) { out.push({ skip: 'no-urn', author }); return; }
-
-        // Post text
         const textBox = item.querySelector('[data-testid="expandable-text-box"]');
         const text = textBox ? (textBox.innerText || textBox.textContent || '').trim() : '';
-        if (!text || text.length < 1) return;
 
-        // Job / poll / repost-without-commentary heuristics
         const ariaText = item.innerText || '';
         const isJobOrPoll = /Promoted|^Promoted|This is a poll|Apply for|jobs/i.test(ariaText.slice(0, 200));
 
-        // Age — find first text that looks like "5h", "2d", "3w", "1mo"
         const ageMatch = ariaText.match(/(\\d+)\\s*(m|h|d|w|mo|y)\\b/);
         let ageDays = null;
         if (ageMatch) {
@@ -102,18 +59,77 @@ export async function scrapeFeed(page: Page, max: number): Promise<ScrapedPost[]
           else if (u === 'y') ageDays = n * 365;
         }
 
-        // Comment count — look for "X comments" or "X comment"
         let commentCount = null;
         const cmm = ariaText.match(/(\\d{1,5})\\s+comments?\\b/);
         if (cmm) commentCount = parseInt(cmm[1], 10);
 
-        out.push({ urn, author, text, ageDays, commentCount, isJobOrPoll });
-      });
+        const um = item.outerHTML.match(/urn:li:activity:(\\d+)/);
+        const urn = um ? um[1] : null;
+
+        return { author, text, ageDays, commentCount, isJobOrPoll, urn };
+      }
+
+      const out = [];
+      const feed = document.querySelector('[data-testid="mainFeed"]');
+      if (!feed) return out;
+
+      const items = feed.querySelectorAll('[role="listitem"]');
+      for (const item of items) {
+        let data = extractData(item);
+        if (!data.author) continue;
+        if (!data.text || data.text.length < 1) continue;
+
+        // If post would obviously be filtered downstream, don't bother surfacing URN
+        if (data.isJobOrPoll) {
+          out.push({ ...data, skip: 'filtered-pre-urn' });
+          continue;
+        }
+
+        // URN absent? Click the post's Comment button to force LinkedIn to fetch
+        // the comment thread, which embeds the URN in DOM. Then press Escape.
+        // This is required since LinkedIn moved to opaque componentkeys (~2026)
+        // and stopped including URNs in feed-render markup.
+        if (!data.urn) {
+          const buttons = item.querySelectorAll('button');
+          let commentBtn = null;
+          for (const b of buttons) {
+            const lbl = (b.getAttribute('aria-label') || b.textContent || '').trim();
+            if (lbl === 'Comment') { commentBtn = b; break; }
+          }
+          if (commentBtn) {
+            try {
+              commentBtn.scrollIntoView({ block: 'center' });
+              await sleep(200 + Math.random() * 200);
+              commentBtn.click();
+              // Wait for URN to appear (poll up to 2.5s)
+              const deadline = Date.now() + 2500;
+              while (Date.now() < deadline) {
+                await sleep(150);
+                const um = item.outerHTML.match(/urn:li:activity:(\\d+)/);
+                if (um) { data.urn = um[1]; break; }
+              }
+              // Close the editor
+              document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+              await sleep(150);
+            } catch (e) {
+              // ignore, fall through to no-urn skip
+            }
+          }
+        }
+
+        if (!data.urn) {
+          out.push({ ...data, skip: 'no-urn' });
+          continue;
+        }
+
+        out.push({ urn: data.urn, author: data.author, text: data.text, ageDays: data.ageDays, commentCount: data.commentCount, isJobOrPoll: data.isJobOrPoll });
+      }
       return out;
     })()`)) as any[];
 
     for (const p of found) {
       if (p.skip === 'no-urn') { postsWithoutUrn++; continue; }
+      if (p.skip === 'filtered-pre-urn') continue; // job/poll, not a URN problem
       if (seenUrns.has(p.urn)) continue;
       seenUrns.add(p.urn);
       posts.push({
