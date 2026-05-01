@@ -3,6 +3,7 @@ import { sleep, jitter } from './browser.js';
 import { snapshotIncident } from './safety-check.js';
 
 export class CommentPublishError extends Error {}
+export class AlreadyCommentedError extends Error {}
 
 export async function likePost(page: Page): Promise<{ liked: boolean; reason?: string }> {
   // Find the post-level Like button. Comment-level Like buttons have aria-label
@@ -74,9 +75,51 @@ async function findEnabledSubmit(page: Page, timeoutMs = 8_000): Promise<Element
   return null;
 }
 
-export async function publishComment(page: Page, postUrl: string, comment: string): Promise<{ liked: boolean; likeReason?: string }> {
+async function expandComments(page: Page, maxClicks = 3): Promise<void> {
+  for (let i = 0; i < maxClicks; i++) {
+    const buttons = await page.$$([
+      'button.comments-comments-list__load-more-comments-button',
+      'button[aria-label*="previous comment" i]',
+      'button[aria-label*="more comment" i]',
+      'button[aria-label*="show more replies" i]',
+    ].join(','));
+    let clicked = false;
+    for (const b of buttons) {
+      if (await b.isVisible().catch(() => false)) {
+        await b.click().catch(() => {});
+        clicked = true;
+        await sleep(jitter(900, 1600));
+        break;
+      }
+    }
+    if (!clicked) break;
+  }
+}
+
+async function hasMyComment(page: Page, vanity: string): Promise<boolean> {
+  await sleep(jitter(800, 1400));
+  await expandComments(page, 3);
+  return await page.evaluate((v: string) => {
+    const slug = v.toLowerCase();
+    const links = Array.from(document.querySelectorAll('a[href*="/in/"]'));
+    for (const a of links) {
+      const href = ((a as HTMLAnchorElement).getAttribute('href') || '').toLowerCase();
+      const m = href.match(/\/in\/([^/?#]+)/);
+      if (!m || m[1] !== slug) continue;
+      const inComment = a.closest('article[class*="comments-comment"], div[class*="comments-comment-item"], div[class*="comments-comment-entity"]');
+      if (inComment) return true;
+    }
+    return false;
+  }, vanity);
+}
+
+export async function publishComment(page: Page, postUrl: string, comment: string, myVanity: string | null): Promise<{ liked: boolean; likeReason?: string }> {
   await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   await sleep(jitter(1500, 3000));
+
+  if (myVanity && await hasMyComment(page, myVanity)) {
+    throw new AlreadyCommentedError(`already commented on this post as /in/${myVanity}/`);
+  }
 
   // Like the post first (humans typically react before commenting)
   const likeResult = await likePost(page);

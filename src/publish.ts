@@ -1,6 +1,7 @@
 import { launch, sleep, jitter } from './linkedin/browser.js';
 import { checkAccountHealth, isPaused, AccountPausedError, writePauseFlag } from './linkedin/safety-check.js';
-import { publishComment, likePost, CommentPublishError } from './linkedin/commenter.js';
+import { publishComment, likePost, CommentPublishError, AlreadyCommentedError } from './linkedin/commenter.js';
+import { detectMyVanity } from './linkedin/identity.js';
 import { listApproved, markStatus, archivePage } from './notion/queue.js';
 import { validateDraft } from './ai/guardrails.js';
 import {
@@ -38,6 +39,15 @@ async function main() {
     if (!DRY_RUN) {
       console.log('Running pre-publish account health check...');
       await checkAccountHealth(page);
+    }
+
+    const myVanity = await detectMyVanity(page);
+    if (myVanity) {
+      console.log(`Identity: /in/${myVanity}/ — will skip any post you already commented on.`);
+    } else {
+      console.error('Could not detect your LinkedIn identity (/in/me/ redirect failed). Set MY_LINKEDIN_VANITY in .env. Aborting — manual-comment guard cannot be enforced.');
+      writePauseFlag('identity detection failed');
+      process.exit(2);
     }
 
     for (const row of approved) {
@@ -80,7 +90,7 @@ async function main() {
 
       try {
         await markStatus(row.pageId, 'publishing');
-        const result = await publishComment(page, row.postUrl, text);
+        const result = await publishComment(page, row.postUrl, text, myVanity);
         await markStatus(row.pageId, 'published', { publishedAt: new Date() });
         await archivePage(row.pageId);
         recordPublishedComment(text);
@@ -90,6 +100,11 @@ async function main() {
         console.log(`  ✓ Published + archived${result.liked ? ' (liked)' : ` (no like: ${result.likeReason})`}`);
         clearRecentFailures();
       } catch (err) {
+        if (err instanceof AlreadyCommentedError) {
+          await markStatus(row.pageId, 'skipped', { reason: 'you already commented on this post (manual)' });
+          console.log(`  ⊘ Skipped: already commented manually on this post`);
+          continue;
+        }
         const msg = err instanceof CommentPublishError ? err.message : (err as Error).message;
         await markStatus(row.pageId, 'failed', { reason: msg });
         failedCount++;
