@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
 
-export const STATE_DIR = join(homedir(), '.linkedin-commenter');
+export const STATE_DIR = join(homedir(), '.linkedin-engage');
 export const CHROME_PROFILE_DIR = process.env.CHROME_PROFILE_DIR || join(STATE_DIR, 'chrome-profile');
 export const SQLITE_PATH = join(STATE_DIR, 'state.db');
 export const PAUSED_FLAG = join(STATE_DIR, 'PAUSED');

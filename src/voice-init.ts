@@ -12,7 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const TEMPLATE_PATH = join(__dirname, 'ai', 'voice-profile.template.md');
 const PROFILE_PATH = join(__dirname, 'ai', 'voice-profile.md');
-const ANSWERS_DIR = join(homedir(), '.linkedin-commenter');
+const ANSWERS_DIR = join(homedir(), '.linkedin-engage');
 const ANSWERS_PATH = join(ANSWERS_DIR, 'voice-answers.json');
 
 interface Answers {

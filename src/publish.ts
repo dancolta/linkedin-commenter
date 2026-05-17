@@ -13,7 +13,7 @@ import { currentPhase, DRY_RUN, PAUSED_ENV } from './config.js';
 
 async function main() {
   if (PAUSED_ENV) { console.log('LINKEDIN_PAUSE=1 — exiting'); process.exit(0); }
-  if (isPaused()) { console.log('PAUSED flag set. Delete ~/.linkedin-commenter/PAUSED to resume.'); process.exit(0); }
+  if (isPaused()) { console.log('PAUSED flag set. Delete ~/.linkedin-engage/PAUSED to resume.'); process.exit(0); }
 
   const phase = currentPhase(getFirstRunAt());
   const alreadyToday = getDailyPublished();
@@ -137,7 +137,7 @@ async function main() {
           continue;
         }
         const msg = err instanceof CommentPublishError ? err.message : (err as Error).message;
-        // Re-approve transient infra failures so the next /linkedin-comment post
+        // Re-approve transient infra failures so the next /linkedin-engage post
         // run picks them up automatically. Hard failures stay 'failed' for review.
         const transient = isInfraError(err);
         await markStatus(row.pageId, transient ? 'approved' : 'failed', { reason: msg });

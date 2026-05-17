@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="./assets/demo.gif" alt="linkedin-commenter demo" width="800">
+  <img src="./assets/demo.gif" alt="linkedin-engage demo" width="800">
 </p>
 
-<h1 align="center">linkedin-commenter</h1>
+<h1 align="center">linkedin-engage</h1>
 
 <p align="center">
   <strong>Auto-draft LinkedIn comments in your voice. Approve in Notion. Publish on a real Chrome profile. Never get flagged.</strong>
@@ -39,7 +39,7 @@ No daemon. No auto-publish. No "5-min undo" magic. Every comment passes through 
 ## Quick start
 
 ```bash
-git clone https://github.com/dancolta/linkedin-commenter && cd linkedin-commenter
+git clone https://github.com/dancolta/linkedin-engage && cd linkedin-engage
 npm install && npx playwright install chromium
 npm install -g @anthropic-ai/claude-code     # if you don't have it
 
@@ -143,7 +143,7 @@ A post must pass all three layers to make it to your LinkedIn.
 | Check | Action |
 |---|---|
 | `LINKEDIN_PAUSE=1` env | Exit immediately |
-| `~/.linkedin-commenter/PAUSED` file | Exit immediately |
+| `~/.linkedin-engage/PAUSED` file | Exit immediately |
 | Daily cap already hit | Exit, mark remaining as `deferred` |
 | Pre-flight health check | Load `/feed/`, scan body text for restriction language → if hit, screenshot + write PAUSED + exit code 2 |
 | Re-validate edited text | Final text (after your manual edits) goes through guardrails again |
@@ -158,7 +158,7 @@ A post must pass all three layers to make it to your LinkedIn.
 | Browser binary | Playwright's bundled Chromium (Chrome for Testing) |
 | `navigator.webdriver` | False (verified via DOM probe) |
 | Args | `--disable-blink-features=AutomationControlled` |
-| Profile | Real persistent context at `~/.linkedin-commenter/chrome-profile/` |
+| Profile | Real persistent context at `~/.linkedin-engage/chrome-profile/` |
 | Cookies | Survive across runs (`li_at` cookie ~1 year TTL) |
 | Viewport | 1440x900 (real laptop screen size) |
 | Mode | Headless by default (no visible window, no focus theft); `LINKEDIN_HEADED=1` to debug. Both modes use the same persistent profile, fingerprint, and timings |
@@ -197,13 +197,13 @@ Any one of these halts both `scan` and `publish`:
 
 ```bash
 LINKEDIN_PAUSE=1 npm run publish        # 1. env var
-touch ~/.linkedin-commenter/PAUSED      # 2. flag file (persists across runs)
+touch ~/.linkedin-engage/PAUSED      # 2. flag file (persists across runs)
                                         # 3. automatic — written when 3 publishes fail
                                         #    in any 1h window or restriction language
                                         #    is detected on /feed/
 ```
 
-To resume after a manual investigation: `rm ~/.linkedin-commenter/PAUSED`.
+To resume after a manual investigation: `rm ~/.linkedin-engage/PAUSED`.
 
 </details>
 
@@ -217,9 +217,9 @@ To resume after a manual investigation: `rm ~/.linkedin-commenter/PAUSED`.
 | Submit button stays disabled | `✗ Failed: submit button not found or still disabled after typing` | Likely typing didn't hit the editor — inspect screenshot at `~/Downloads/linkedin-incident-no-submit-button-*.png` |
 | Transient browser hiccup (page/context closed, net::ERR_) | `⚠ Infra error (...) — recovering page and retrying once` | Auto-recovered — `publish.ts` swaps in a fresh page, waits 15-40s, retries once. If the retry still fails, the row is re-set to `approved` so the next `publish` run picks it up |
 | Notion 404 on data source | `Could not find database with ID: <ds_id>` | In Notion, share the DB with your integration via DB → "..." → Connections |
-| Restriction banner detected | `ACCOUNT PAUSED: <signal>` + exit code 2 | Open the screenshot, log into LinkedIn manually, address the verification, then `rm ~/.linkedin-commenter/PAUSED` |
+| Restriction banner detected | `ACCOUNT PAUSED: <signal>` + exit code 2 | Open the screenshot, log into LinkedIn manually, address the verification, then `rm ~/.linkedin-engage/PAUSED` |
 | Claude usage limit hit | `Usage limit hit. Stopping.` | Wait for subscription quota reset, retry |
-| 3 consecutive publish failures | Auto-PAUSED with reason in flag file | Read flag (`cat ~/.linkedin-commenter/PAUSED`), inspect screenshots, address root cause, delete flag |
+| 3 consecutive publish failures | Auto-PAUSED with reason in flag file | Read flag (`cat ~/.linkedin-engage/PAUSED`), inspect screenshots, address root cause, delete flag |
 
 All Playwright incidents save a full-page screenshot to `~/Downloads/linkedin-incident-<reason>-<timestamp>.png` for post-mortem.
 
@@ -300,7 +300,7 @@ npm run publish
 <summary><strong>Project layout</strong></summary>
 
 ```
-linkedin-commenter/
+linkedin-engage/
 ├── assets/demo.gif
 ├── src/
 │   ├── scan.ts                          # entrypoint: scrape + batch-draft + queue
@@ -324,7 +324,7 @@ linkedin-commenter/
 │   ├── notion/
 │   │   ├── client.ts                    # @notionhq/client wrapper
 │   │   └── queue.ts                     # createPending, listApproved, archivePage
-│   ├── cache/sqlite.ts                  # ~/.linkedin-commenter/state.db
+│   ├── cache/sqlite.ts                  # ~/.linkedin-engage/state.db
 │   └── tools/                           # one-off utilities
 └── package.json
 ```
@@ -338,8 +338,8 @@ linkedin-commenter/
 | `src/ai/voice-profile.template.md` | committed | Template + verbatim universal rules; same for everyone |
 | `chrome-profile/` | gitignored | LinkedIn cookies, persistent browser state |
 | `state.db` | gitignored | SQLite cache: dedup, daily counter, recent comments |
-| `~/.linkedin-commenter/voice-answers.json` | outside repo | Your wizard answers (so you can re-run + iterate) |
-| `~/.linkedin-commenter/PAUSED` | outside repo | Kill-switch flag |
+| `~/.linkedin-engage/voice-answers.json` | outside repo | Your wizard answers (so you can re-run + iterate) |
+| `~/.linkedin-engage/PAUSED` | outside repo | Kill-switch flag |
 
 </details>
 
@@ -349,16 +349,16 @@ linkedin-commenter/
 If you use [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) and want to trigger the worker via slash-command instead of `npm run`, drop a thin skill wrapper into `~/.claude/skills/`. Not bundled with the repo (lives outside the project, per-machine).
 
 ```bash
-mkdir -p ~/.claude/skills/linkedin-comment
-$EDITOR ~/.claude/skills/linkedin-comment/SKILL.md
+mkdir -p ~/.claude/skills/linkedin-engage
+$EDITOR ~/.claude/skills/linkedin-engage/SKILL.md
 ```
 
 Paste this in (replace `<path-to-repo>` and `<your_db_id>`):
 
 ```markdown
-# /linkedin-comment
+# /linkedin-engage
 
-Thin wrapper over the linkedin-commenter project at <path-to-repo>.
+Thin wrapper over the linkedin-engage project at <path-to-repo>.
 
 ## Args
 - `run` (or no arg) → scan + draft + queue to Notion
@@ -384,10 +384,10 @@ Stream output. Use a 10-minute timeout for `run` and `post`.
 ## Critical: account safety signals
 If output contains `ACCOUNT PAUSED`, `RESTRICTION`, `CAPTCHA`, `LOGIN_REQUIRED`, or exit code 2:
 - DO NOT retry. Halt.
-- Tell the user: "LinkedIn account safety check failed. Open `~/Downloads/linkedin-incident-*.png` to see the modal. After confirming the account is healthy, delete `~/.linkedin-commenter/PAUSED` to resume."
+- Tell the user: "LinkedIn account safety check failed. Open `~/Downloads/linkedin-incident-*.png` to see the modal. After confirming the account is healthy, delete `~/.linkedin-engage/PAUSED` to resume."
 ```
 
-After saving, the skill is available as `/linkedin-comment run|post|status|setup`. Restart Claude Code if it doesn't show up.
+After saving, the skill is available as `/linkedin-engage run|post|status|setup`. Restart Claude Code if it doesn't show up.
 
 </details>
 

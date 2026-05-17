@@ -17,7 +17,7 @@ import {
 
 async function main() {
   if (PAUSED_ENV) { console.log('LINKEDIN_PAUSE=1 — exiting'); process.exit(0); }
-  if (isPaused()) { console.log('PAUSED flag set — exiting. Delete ~/.linkedin-commenter/PAUSED to resume.'); process.exit(0); }
+  if (isPaused()) { console.log('PAUSED flag set — exiting. Delete ~/.linkedin-engage/PAUSED to resume.'); process.exit(0); }
 
   const phase = currentPhase(getFirstRunAt());
   console.log(`Phase cap: scan max ${phase.maxScan}, daily publish cap ${phase.dailyCap}`);

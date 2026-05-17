@@ -12,7 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const VOICE_PROFILE_PATH = join(__dirname, 'ai', 'voice-profile.md');
 
 async function main() {
-  console.log('=== linkedin-commenter setup ===\n');
+  console.log('=== linkedin-engage setup ===\n');
 
   console.log(`State dir: ${STATE_DIR} ${existsSync(STATE_DIR) ? '✓' : '(will be created)'}`);
   console.log(`Chrome profile dir: ${CHROME_PROFILE_DIR} ${existsSync(CHROME_PROFILE_DIR) ? '✓ exists' : '(will be created on first launch)'}`);
