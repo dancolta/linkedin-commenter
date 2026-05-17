@@ -44,7 +44,25 @@ export interface ValidationResult {
   reason?: string;
 }
 
-export function validateDraft(draft: string, recentComments: string[] = []): ValidationResult {
+// First-word buckets we want to cap. A draft whose first word falls in this set
+// gets rejected if the same bucket is already overused in the (recent + batch) pool.
+// "Yeah", "Honestly", "Kinda", "Same" are the four discourse-marker openers Dan
+// uses but doesn't want stacked. Anything else (first-person verbs, scene openers,
+// "Ran", "Watched", "Hmm", "Wait", etc.) is unrestricted.
+const RATIONED_FIRST_WORDS = new Set(['yeah', 'honestly', 'kinda', 'same']);
+const OVERUSE_RATIO = 0.25; // max 25% of the pool can share the same rationed first word
+const POOL_MIN = 4;          // small pools allow up to 1 occurrence (1/4 = 25%)
+
+function firstWord(s: string): string {
+  const m = s.trim().match(/^[\w']+/);
+  return m ? m[0].toLowerCase() : '';
+}
+
+export function validateDraft(
+  draft: string,
+  recentComments: string[] = [],
+  batchAcceptedDrafts: string[] = [],
+): ValidationResult {
   const trimmed = draft.trim();
   if (trimmed === 'SKIP') return { ok: false, reason: 'drafter returned SKIP' };
   if (trimmed.length < 30) return { ok: false, reason: 'too short (<30 chars)' };
@@ -70,6 +88,17 @@ export function validateDraft(draft: string, recentComments: string[] = []): Val
   for (const recent of recentComments) {
     if (firstWords(recent, 4).toLowerCase() === opener) {
       return { ok: false, reason: 'opener matches recent comment' };
+    }
+  }
+
+  // First-word overuse check: cap rationed discourse-marker openers across recent + batch.
+  const draftFirst = firstWord(trimmed);
+  if (RATIONED_FIRST_WORDS.has(draftFirst)) {
+    const pool = [...recentComments, ...batchAcceptedDrafts];
+    const poolSize = Math.max(pool.length + 1, POOL_MIN); // +1 to include this draft
+    const sameCount = pool.filter(c => firstWord(c) === draftFirst).length + 1;
+    if (sameCount / poolSize > OVERUSE_RATIO) {
+      return { ok: false, reason: `first-word overused: "${draftFirst}" (${sameCount}/${poolSize} > 25%)` };
     }
   }
 

@@ -96,7 +96,7 @@ async function expandComments(page: Page, maxClicks = 3): Promise<void> {
   }
 }
 
-async function hasMyComment(page: Page, vanity: string): Promise<boolean> {
+export async function hasMyComment(page: Page, vanity: string): Promise<boolean> {
   await sleep(jitter(800, 1400));
   await expandComments(page, 3);
   return await page.evaluate((v: string) => {
@@ -111,6 +111,21 @@ async function hasMyComment(page: Page, vanity: string): Promise<boolean> {
     }
     return false;
   }, vanity);
+}
+
+/**
+ * Open the post URL and check if the logged-in user (vanity) has a comment in
+ * the rendered thread. Used at scan time to prevent re-queueing posts the user
+ * already commented on manually.
+ */
+export async function checkIAlreadyCommented(page: Page, postUrl: string, vanity: string): Promise<boolean> {
+  try {
+    await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 25_000 });
+    await sleep(jitter(1500, 2500));
+    return await hasMyComment(page, vanity);
+  } catch {
+    return false; // Don't block on transient errors; the publish-time guard will still catch.
+  }
 }
 
 export async function publishComment(page: Page, postUrl: string, comment: string, myVanity: string | null): Promise<{ liked: boolean; likeReason?: string }> {

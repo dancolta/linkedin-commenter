@@ -4,8 +4,11 @@ import { existsSync, mkdirSync } from 'node:fs';
 
 export async function launch(opts: { headless?: boolean } = {}): Promise<BrowserContext> {
   if (!existsSync(CHROME_PROFILE_DIR)) mkdirSync(CHROME_PROFILE_DIR, { recursive: true });
+  // Default to headless. Override per-call (e.g. setup.ts needs headed for login).
+  // LINKEDIN_HEADED=1 in .env forces headed for ad-hoc debugging.
+  const headless = opts.headless ?? (process.env.LINKEDIN_HEADED === '1' ? false : true);
   return chromium.launchPersistentContext(CHROME_PROFILE_DIR, {
-    headless: opts.headless ?? false,
+    headless,
     viewport: { width: 1440, height: 900 },
     args: ['--disable-blink-features=AutomationControlled'],
   });

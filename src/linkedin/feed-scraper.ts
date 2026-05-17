@@ -26,10 +26,11 @@ export async function scrapeFeed(page: Page, max: number): Promise<ScrapedPost[]
   const seenUrns = new Set<string>();
   let scrolls = 0;
   let postsWithoutUrn = 0;
-  const maxScrolls = 60;
+  const maxScrolls = 20;
+  const perCallItemBudget = 6; // cap URN-extraction work per scroll, prevents page meltdown
 
   while (posts.length < max && scrolls < maxScrolls) {
-    const found: any[] = (await page.evaluate(`(async () => {
+    const found: any[] = (await page.evaluate(`(async (budget) => {
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
       function extractData(item) {
@@ -74,10 +75,13 @@ export async function scrapeFeed(page: Page, max: number): Promise<ScrapedPost[]
       if (!feed) return out;
 
       const items = feed.querySelectorAll('[role="listitem"]');
+      let urnAttempts = 0;
       for (const item of items) {
+        if (item.getAttribute('data-li-processed') === '1') continue;
         let data = extractData(item);
         if (!data.author) continue;
         if (!data.text || data.text.length < 1) continue;
+        item.setAttribute('data-li-processed', '1');
 
         // If post would obviously be filtered downstream, don't bother surfacing URN
         if (data.isJobOrPoll) {
@@ -89,7 +93,8 @@ export async function scrapeFeed(page: Page, max: number): Promise<ScrapedPost[]
         // the comment thread, which embeds the URN in DOM. Then press Escape.
         // This is required since LinkedIn moved to opaque componentkeys (~2026)
         // and stopped including URNs in feed-render markup.
-        if (!data.urn) {
+        if (!data.urn && urnAttempts < budget) {
+          urnAttempts++;
           const buttons = item.querySelectorAll('button');
           let commentBtn = null;
           for (const b of buttons) {
@@ -101,16 +106,18 @@ export async function scrapeFeed(page: Page, max: number): Promise<ScrapedPost[]
               commentBtn.scrollIntoView({ block: 'center' });
               await sleep(200 + Math.random() * 200);
               commentBtn.click();
-              // Wait for URN to appear (poll up to 2.5s)
-              const deadline = Date.now() + 2500;
+              // Wait for URN to appear (poll up to 1.2s)
+              const deadline = Date.now() + 1200;
               while (Date.now() < deadline) {
-                await sleep(150);
+                await sleep(120);
                 const um = item.outerHTML.match(/urn:li:activity:(\\d+)/);
                 if (um) { data.urn = um[1]; break; }
               }
-              // Close the editor
-              document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-              await sleep(150);
+              // Close the editor — try focused element + body
+              const ev = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+              (document.activeElement || document.body).dispatchEvent(ev);
+              document.body.dispatchEvent(ev);
+              await sleep(120);
             } catch (e) {
               // ignore, fall through to no-urn skip
             }
@@ -125,7 +132,7 @@ export async function scrapeFeed(page: Page, max: number): Promise<ScrapedPost[]
         out.push({ urn: data.urn, author: data.author, text: data.text, ageDays: data.ageDays, commentCount: data.commentCount, isJobOrPoll: data.isJobOrPoll });
       }
       return out;
-    })()`)) as any[];
+    })(${perCallItemBudget})`)) as any[];
 
     for (const p of found) {
       if (p.skip === 'no-urn') { postsWithoutUrn++; continue; }
@@ -146,6 +153,9 @@ export async function scrapeFeed(page: Page, max: number): Promise<ScrapedPost[]
     if (posts.length < max) {
       await humanScroll(page, 2);
       scrolls++;
+      if (scrolls % 3 === 0) {
+        console.log(`  ...scroll ${scrolls}/${maxScrolls}, posts=${posts.length}/${max}, no-urn=${postsWithoutUrn}`);
+      }
     }
   }
 

@@ -11,7 +11,7 @@
 <p align="center">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white">
   <img alt="Node" src="https://img.shields.io/badge/Node-%3E=20-339933?logo=node.js&logoColor=white">
-  <img alt="Playwright" src="https://img.shields.io/badge/Playwright-headed-2EAD33?logo=playwright&logoColor=white">
+  <img alt="Playwright" src="https://img.shields.io/badge/Playwright-headless-2EAD33?logo=playwright&logoColor=white">
   <img alt="Notion" src="https://img.shields.io/badge/Notion-queue-000000?logo=notion&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
@@ -89,7 +89,9 @@ Re-run `voice:init` anytime — your previous answers preload as defaults so you
 
 ## Out of scope
 
-Daemon mode. Auto-publish. Cloud hosting. DM outreach. Headless mode. All deliberately not built — they'd either cost account safety or defeat manual approval.
+Daemon mode. Auto-publish. Cloud hosting. DM outreach. All deliberately not built — they'd either cost account safety or defeat manual approval.
+
+> Runs headless by default so it doesn't steal focus from your other windows. Set `LINKEDIN_HEADED=1` in `.env` to watch the browser (useful for debugging selector drift). `setup` always runs headed since you need to log into LinkedIn manually.
 
 ---
 
@@ -159,7 +161,7 @@ A post must pass all three layers to make it to your LinkedIn.
 | Profile | Real persistent context at `~/.linkedin-commenter/chrome-profile/` |
 | Cookies | Survive across runs (`li_at` cookie ~1 year TTL) |
 | Viewport | 1440x900 (real laptop screen size) |
-| Mode | Headed only — never headless (LinkedIn fingerprints headless) |
+| Mode | Headless by default (no visible window, no focus theft); `LINKEDIN_HEADED=1` to debug. Both modes use the same persistent profile, fingerprint, and timings |
 | Scroll | 200-600px steps, 1.5-4s pauses, 15% chance of back-scroll |
 | Typing | 35-90ms per keystroke, 4% chance of mid-word pause (300-700ms), no paste |
 | Mouse clicks | ±3px jitter around target coordinate |
@@ -213,6 +215,7 @@ To resume after a manual investigation: `rm ~/.linkedin-commenter/PAUSED`.
 | Not logged into Chrome profile | `Scraped 0 posts. Check ~/Downloads/...png` | Run `npm run setup`, log into LinkedIn in the Playwright Chrome window, close it |
 | LinkedIn shipped new selectors | `(N posts skipped — no URN extractable)` | Open `src/linkedin/feed-scraper.ts`, update selectors against latest DOM |
 | Submit button stays disabled | `✗ Failed: submit button not found or still disabled after typing` | Likely typing didn't hit the editor — inspect screenshot at `~/Downloads/linkedin-incident-no-submit-button-*.png` |
+| Transient browser hiccup (page/context closed, net::ERR_) | `⚠ Infra error (...) — recovering page and retrying once` | Auto-recovered — `publish.ts` swaps in a fresh page, waits 15-40s, retries once. If the retry still fails, the row is re-set to `approved` so the next `publish` run picks it up |
 | Notion 404 on data source | `Could not find database with ID: <ds_id>` | In Notion, share the DB with your integration via DB → "..." → Connections |
 | Restriction banner detected | `ACCOUNT PAUSED: <signal>` + exit code 2 | Open the screenshot, log into LinkedIn manually, address the verification, then `rm ~/.linkedin-commenter/PAUSED` |
 | Claude usage limit hit | `Usage limit hit. Stopping.` | Wait for subscription quota reset, retry |
@@ -258,7 +261,7 @@ Status flips to `published`, then the row is **auto-archived** (hidden from defa
 
 ```
 npm run scan
-  1. Open Chrome (real persistent profile, headed)
+  1. Launch Chromium (real persistent profile, headless by default)
   2. Navigate to /feed/, wait for [data-testid="mainFeed"]
   3. Scroll the feed, extract posts via stable selectors:
          - listitem wrapper:  [role="listitem"]
@@ -282,7 +285,8 @@ npm run publish
          wait, type comment 35-90ms/key →
          click submit, verify editor cleared
   3. On success: status=published, archive Notion row, record SQLite history
-  4. On 3 consecutive failures: write PAUSED flag, halt
+  4. On transient infra error (page/context closed, net::ERR_): recover live page, retry once with 15-40s cooldown; if still fails, re-set row to `approved` for the next run
+  5. On 3 consecutive failures in 1h: write PAUSED flag, halt
 ```
 
 **Efficiency wins:**
@@ -389,7 +393,7 @@ After saving, the skill is available as `/linkedin-comment run|post|status|setup
 
 ## Stack
 
-Node 20+ (TypeScript, ESM via tsx) · Playwright (headed Chromium) · `@notionhq/client` · `better-sqlite3` · `claude` CLI for drafting (uses your Claude subscription, no API key needed)
+Node 20+ (TypeScript, ESM via tsx) · Playwright (headless Chromium, `LINKEDIN_HEADED=1` to debug) · `@notionhq/client` · `better-sqlite3` · `claude` CLI for drafting (uses your Claude subscription, no API key needed)
 
 ---
 

@@ -14,6 +14,7 @@ export class DrafterError extends Error {}
 export interface PostInput {
   author: string;
   text: string;
+  qcFeedback?: { previousDraft: string; issues: string[]; suggestion?: string };
 }
 
 const TEXT_TRUNCATE = 800;
@@ -23,7 +24,13 @@ export async function draftBatch(posts: PostInput[]): Promise<string[]> {
 
   const numbered = posts.map((p, i) => {
     const text = p.text.slice(0, TEXT_TRUNCATE);
-    return `### POST ${i + 1} (by ${p.author})\n${text}`;
+    let block = `### POST ${i + 1} (by ${p.author})\n${text}`;
+    if (p.qcFeedback) {
+      const issues = p.qcFeedback.issues.map(s => `- ${s}`).join('\n');
+      const suggestion = p.qcFeedback.suggestion ? `\nSuggestion: ${p.qcFeedback.suggestion}` : '';
+      block += `\n\n[QC REJECTED A PRIOR DRAFT FOR THIS POST]\nPrior draft: ${p.qcFeedback.previousDraft}\nIssues:\n${issues}${suggestion}\n\nWrite a fresh comment that fixes these specific issues. Do not reuse the prior draft's structure or opener.`;
+    }
+    return block;
   }).join('\n\n');
 
   const prompt = `${VOICE_PROFILE}
