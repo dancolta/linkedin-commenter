@@ -32,24 +32,13 @@
 
 ## What it does
 
+<p align="center">
+  <img src="./assets/loop-diagram.gif" alt="Scan → Approve → Publish loop" width="900">
+</p>
+
 You want to show up consistently in other people's LinkedIn comments. The honest way takes 30-40 minutes of scrolling a day. The "automated" way turns you into a Taplio bot praising someone's Q3 wins.
 
-This tool sits in the middle:
-
-```
-  1.  Scan         → It scrapes your feed, filters slop, and AI-drafts a
-                     comment in your voice for every post that matters.
-
-  2.  Approve      → Drafts land in Notion. You read each post, edit or
-                     reject, flip the row to "approved."  ~10-15 min/day.
-
-  3.  Publish      → It opens your real Chrome profile, likes the post,
-                     types the comment at human speed, archives the row.
-                     Hard cap: 15/day. You see every comment before it
-                     goes live.
-```
-
-No daemon. No auto-publish. No "5-minute undo" magic. If you don't open Notion, nothing ships.
+This tool sits in the middle. **It drafts. You approve. Then it publishes — at human speed, capped at 15/day, never without your click.** If you don't open Notion, nothing ships.
 
 > _Screenshot of the Notion approval queue → `assets/notion-queue.png` (todo)_
 
