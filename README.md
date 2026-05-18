@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/demo.gif" alt="linkedin-engage demo" width="640">
+  <img src="./assets/hero.gif" alt="linkedin-engage" width="900">
 </p>
 
 <h1 align="center">linkedin-engage</h1>
