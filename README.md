@@ -1,40 +1,66 @@
 <p align="center">
-  <img src="./assets/demo.gif" alt="linkedin-engage demo" width="800">
+  <img src="./assets/demo.gif" alt="linkedin-engage demo" width="640">
 </p>
 
 <h1 align="center">linkedin-engage</h1>
 
 <p align="center">
-  <strong>Auto-draft LinkedIn comments in your voice. Approve in Notion. Publish on a real Chrome profile. Never get flagged.</strong>
+  <strong>Draft LinkedIn comments in your voice. Approve in Notion. Publish like a human.</strong>
 </p>
 
 <p align="center">
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white">
-  <img alt="Node" src="https://img.shields.io/badge/Node-%3E=20-339933?logo=node.js&logoColor=white">
-  <img alt="Playwright" src="https://img.shields.io/badge/Playwright-headless-2EAD33?logo=playwright&logoColor=white">
-  <img alt="Notion" src="https://img.shields.io/badge/Notion-queue-000000?logo=notion&logoColor=white">
+  <em>Every comment requires a human click in Notion before it publishes.<br>
+  The 15-comments-a-day cap is hardcoded, not a setting.</em>
+</p>
+
+<p align="center">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white">
+  <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-yes-success">
+</p>
+
+<p align="center">
+  <a href="#what-it-does">What it does</a> ·
+  <a href="#who-this-is-for">Who it's for</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#what-this-is-not">What this is NOT</a> ·
+  <a href="#how-it-compares">vs Taplio / Engage AI / Aware</a> ·
+  <a href="#reference">Reference</a>
 </p>
 
 ---
 
-## Why this exists
+## What it does
 
-LinkedIn's feed is mostly slop. AI-generated motivational posts, engagement bait, recycled hot takes, broetry stacks. Filtering manually for posts worth a reply means scrolling 30-40 minutes a day, mostly through stuff that doesn't deserve a reaction.
+You want to show up consistently in other people's LinkedIn comments. The honest way takes 30-40 minutes of scrolling a day. The "automated" way turns you into a Taplio bot praising someone's Q3 wins.
 
-Full automation makes things worse — auto-comment bots turn LinkedIn into bots talking to bots, and your account is one of them.
-
-This tool sits in the middle. **You** define what posts matter (keywords, authors). **The tool** scrapes, drafts in your voice, queues to Notion. **You** read each post, edit if needed, publish in batch. **10-15 min instead of 30-40.** You see every comment before it goes live.
-
-## The loop
+This tool sits in the middle:
 
 ```
-1. npm run scan      → scrape feed, apply your filters, draft in your voice, queue to Notion
-2. you approve       → in Notion: read post, tweak draft, flip status to "approved"
-3. npm run publish   → like the post, type the comment at human speed, archive the row
+  1.  Scan         → It scrapes your feed, filters slop, and AI-drafts a
+                     comment in your voice for every post that matters.
+
+  2.  Approve      → Drafts land in Notion. You read each post, edit or
+                     reject, flip the row to "approved."  ~10-15 min/day.
+
+  3.  Publish      → It opens your real Chrome profile, likes the post,
+                     types the comment at human speed, archives the row.
+                     Hard cap: 15/day. You see every comment before it
+                     goes live.
 ```
 
-No daemon. No auto-publish. No "5-min undo" magic. Every comment passes through your eyes.
+No daemon. No auto-publish. No "5-minute undo" magic. If you don't open Notion, nothing ships.
+
+> _Screenshot of the Notion approval queue → `assets/notion-queue.png` (todo)_
+
+## Who this is for
+
+- Founders, operators, and consultants growing a personal brand on LinkedIn
+- People who can paste three commands into a terminal but aren't software engineers
+- Anyone who already hates LinkedIn slop and refuses to add to it
+- Single-operator use only — not designed to manage other people's accounts
+
+If you want a managed SaaS that posts for you, use [Taplio](https://taplio.com) or [Engage AI](https://engage-ai.co). If you want control, voice fidelity, no monthly bill, and a hard human-in-the-loop — keep reading.
 
 ## Quick start
 
@@ -44,19 +70,48 @@ npm install && npx playwright install chromium
 npm install -g @anthropic-ai/claude-code     # if you don't have it
 
 cp .env.example .env                         # fill NOTION_TOKEN + NOTION_DB_ID
-npm run voice:init                           # 15-question wizard → personalized voice profile
-npm run setup                                # verifies Notion + claude CLI + Chrome login
+npm run voice:init                           # 15-question wizard → your voice profile
+npm run setup                                # verifies Notion + Claude CLI + Chrome login
 
-npm run scan                                 # scrape + draft + queue
-# approve drafts in Notion
-npm run publish                              # like + publish + auto-archive
+npm run scan                                 # scrape + draft + queue to Notion
+# approve drafts in Notion (~10-15 min)
+npm run publish                              # like + comment + archive, capped at 15/day
 ```
 
-For the Notion DB you need to create, see the [Notion DB setup](#user-content-notion-db-setup) accordion below.
+For the Notion DB you need to create first, see [Notion DB setup](#user-content-notion-db-setup) below.
+
+> Runs headless by default so it doesn't steal focus. Set `LINKEDIN_HEADED=1` to watch the browser (useful for debugging). `setup` always runs headed since you log into LinkedIn manually once.
+
+## What this is NOT
+
+To keep us honest, and to save you the read if this isn't the tool you're looking for:
+
+- **Not auto-comment.** Every comment is approved by you in Notion before it publishes.
+- **Not a Taplio / Engage AI replacement.** No AI-ghostwriting your feed. No cloud. No subscription.
+- **Not "set and forget."** If you don't review Notion, nothing ships.
+- **Not a growth hack.** Hard 15/day cap. No DM blasts. No connection spam. No follower farming. No engagement pods.
+- **Not multi-account.** Single operator. Not built for agencies running 50 client logins.
+- **Not a SaaS.** Runs on your laptop, your Chrome session, your cookies. Nothing leaves your machine except the LinkedIn comments you approved.
+
+## <a id="how-it-compares"></a>How this compares to Taplio, Engage AI, and Aware
+
+Those are SaaS products: cloud-hosted, subscription-priced, and they hold the publish button. This tool is none of those things. Pick the one that matches how you want to work.
+
+|  | linkedin-engage | Taplio / Engage AI / Aware |
+|---|---|---|
+| Hosting | Your laptop | Their cloud |
+| Approval | Notion queue, you approve every comment | Auto-publish or in-app queue |
+| Voice | Generated from your writing samples, runs locally via Claude | Generic tone presets, in-product fine-tune |
+| Price | Free (uses your Claude subscription, no API key) | $39–$149 / month |
+| Daily cap | Hard 15, phased ramp from 5 | Varies, often uncapped |
+| Account risk control | Human-paced typing, manual approval, 14-day same-author cooldown | Depends on tool; shared cloud IPs raise flag rate |
+| Setup time | ~10 minutes | ~2 minutes (it's SaaS) |
+
+If you want a managed product, the SaaS options work. If you want a tool where _you_ are the bottleneck on purpose, this is it.
 
 ## Targeting (what gets drafted)
 
-Four optional `.env` vars. Pipe-separated, case-insensitive substring match. Filters apply **before** the Claude call (saves tokens + time).
+Four optional `.env` vars. Pipe-separated, case-insensitive substring match. Filters apply **before** the Claude call (saves tokens and time).
 
 | Var | Effect |
 |---|---|
@@ -75,9 +130,9 @@ SKIP_AUTHORS=hustle bro|crypto guru|cold outreach guru
 
 Skipped posts surface in the scan summary so you can tune the lists.
 
-## Voice
+## AI drafting in your voice
 
-`npm run voice:init` runs a 15-question wizard (identity, tone register, writing samples, topics, what annoys you about LinkedIn) and shells to `claude -p` to synthesize `src/ai/voice-profile.md` — the personalized prompt the drafter uses for every comment.
+`npm run voice:init` runs a 15-question wizard (identity, tone register, writing samples, topics you care about, what annoys you about LinkedIn) and shells to `claude -p` to synthesize `src/ai/voice-profile.md` — the personalized prompt the drafter uses for every comment.
 
 ```bash
 npm run voice:init    # generate / regenerate voice profile
@@ -85,103 +140,69 @@ npm run voice         # open voice-profile.md for hand-tweaks
 npm run draft:test -- "<paste a real post>"   # sanity check
 ```
 
-Re-run `voice:init` anytime — your previous answers preload as defaults so you can iterate fast.
+Re-run `voice:init` anytime — your previous answers preload as defaults so you can iterate fast. The profile is gitignored; it stays on your machine.
 
-## Out of scope
+## What this deliberately does not do
 
-Daemon mode. Auto-publish. Cloud hosting. DM outreach. All deliberately not built — they'd either cost account safety or defeat manual approval.
-
-> Runs headless by default so it doesn't steal focus from your other windows. Set `LINKEDIN_HEADED=1` in `.env` to watch the browser (useful for debugging selector drift). `setup` always runs headed since you need to log into LinkedIn manually.
+Daemon mode. Auto-publish. Cloud hosting. DM outreach. Multi-account management. All deliberately not built — they'd either cost account safety, defeat manual approval, or turn this into a different tool.
 
 ---
 
-## Reference
+## <a id="reference"></a>Reference
 
-Detail below covers what's running under the surface. Most users never need to touch any of it.
+Everything below is for the curious or the troubleshooting. Most users never need to touch any of it.
 
 <details id="edge-cases-and-guardrails">
-<summary><strong>Edge cases & guardrails</strong> — three layers, ~30 filters</summary>
+<summary><strong>Behavioral safeguards</strong> — three layers of human-in-the-loop checks</summary>
 
-A post must pass all three layers to make it to your LinkedIn.
+A post must pass all three layers to make it to your LinkedIn. The first two run before any comment is even drafted — saving you tokens, time, and risk.
 
-#### Layer 1 — Pre-draft filters (`scan.ts`, before any Claude call)
+#### Layer 1 — Pre-draft filters (run on every scraped post, before any AI call)
 
-| Filter | Rule | Reason |
+| Filter | Rule | Why |
 |---|---|---|
 | Post too short | `<50 chars` | Not enough to react to |
-| Job or poll | `isJobOrPoll` heuristic | Wrong content type |
+| Job or poll | heuristic | Wrong content type for a comment |
 | Stale post | `ageDays > 7` | Old news, low signal |
 | Drowned post | `commentCount > 150` | Your comment vanishes in the noise |
-| Already seen | `seen_posts` SQLite | Cross-run dedup, prevents re-queue |
-| Same author <14 days | `author_history` SQLite | Looks robotic, may flag profile |
-| `SKIP_AUTHORS` match | env var, substring | You don't want to engage with them |
-| Not in `ONLY_AUTHORS` | env var, substring | If allowlist is set and author isn't on it |
-| `SKIP_KEYWORDS` match | env var, substring on post text | Off-topic / engagement bait |
-| No `ONLY_KEYWORDS` match | env var, substring on post text | If topic allowlist is set and post doesn't match |
-| Same author this scan | in-batch `Set<author>` | Within-run dedup |
-| Same author already pending | `listOpenAuthors()` Notion query | Approved/pending row exists, don't queue twice |
-| Non-English post | `detectEnglish()` heuristic | <75% Latin chars OR zero English stopwords |
+| Already seen | SQLite dedup | Cross-run, prevents re-queue |
+| Same author <14 days | SQLite history | Cooldown — looks robotic otherwise |
+| `SKIP_AUTHORS` / `SKIP_KEYWORDS` | env var match | Your blocklist |
+| `ONLY_AUTHORS` / `ONLY_KEYWORDS` | env var miss | Your allowlist filter |
+| Author already pending in Notion | live query | Don't double-queue |
+| Non-English post | language heuristic | <75% Latin chars OR zero English stopwords |
 
-#### Layer 2 — Drafter output validation (`guardrails.ts`, before Notion write)
+#### Layer 2 — Drafter output validation (after AI, before Notion)
 
 | Check | Rejects if |
 |---|---|
 | Drafter abstained | Output literally equals `SKIP` |
-| Length min | `<30 chars` |
-| Length max | `>280 chars` |
-| Exclamation marks | Any `!` present |
-| Hashtags | `#word` after start-of-string or whitespace (allows mid-word `f#ck` censored swears) |
-| Unicode emoji | Any codepoint in emoji ranges |
-| Em/en dash | Any `—` or `–` (use period/comma/semicolon instead) |
-| Antithesis structure | `not X, Y` / `it's not X. it's Y` / `less X, more Y` / `isn't X, it's Y` patterns |
-| Banned opener | First word matches any of 24 phrases (great post, love this, hot take, etc.) |
-| Banned anywhere | 22 phrases (curious, leverage, synergy, game-changer, …) |
+| Length | `<30` or `>280` characters |
+| Exclamation marks, hashtags, emoji, em/en dashes | Any present (LinkedIn-AI tells) |
+| Antithesis structure | `not X, Y` / `it's not X. it's Y` / `less X, more Y` (classic AI cadence) |
+| Banned opener | First word matches any of 24 phrases ("great post", "love this", "hot take", …) |
+| Banned anywhere | 22 sludge phrases ("curious", "leverage", "synergy", "game-changer", …) |
 | Opener repeats | First 4 words match any of last 20 published comments |
 
-#### Layer 3 — Pre-publish re-checks (`publish.ts`, immediately before each publish)
+#### Layer 3 — Pre-publish re-checks (immediately before each comment ships)
 
 | Check | Action |
 |---|---|
-| `LINKEDIN_PAUSE=1` env | Exit immediately |
-| `~/.linkedin-engage/PAUSED` file | Exit immediately |
-| Daily cap already hit | Exit, mark remaining as `deferred` |
-| Pre-flight health check | Load `/feed/`, scan body text for restriction language → if hit, screenshot + write PAUSED + exit code 2 |
-| Re-validate edited text | Final text (after your manual edits) goes through guardrails again |
-| 14-day same-author re-check | Mark `skipped` if author was published since draft was approved |
-| Daily cap mid-batch | Defer remaining rows, exit cleanly |
+| `LINKEDIN_PAUSE=1` or `~/.linkedin-engage/PAUSED` flag | Exit immediately |
+| Daily cap already hit | Defer remaining rows, exit |
+| Pre-flight account health check | Load `/feed/`, scan for restriction language → on hit, screenshot + write PAUSED + exit code 2 |
+| Re-validate your edited text | Final text goes through guardrails again |
+| 14-day same-author re-check | Skip if author was published since draft was approved |
 | 3 publish failures in 1h | Auto-write PAUSED, halt batch |
 
-#### Browser anti-detection
-
-| Measure | Value |
-|---|---|
-| Browser binary | Playwright's bundled Chromium (Chrome for Testing) |
-| `navigator.webdriver` | False (verified via DOM probe) |
-| Args | `--disable-blink-features=AutomationControlled` |
-| Profile | Real persistent context at `~/.linkedin-engage/chrome-profile/` |
-| Cookies | Survive across runs (`li_at` cookie ~1 year TTL) |
-| Viewport | 1440x900 (real laptop screen size) |
-| Mode | Headless by default (no visible window, no focus theft); `LINKEDIN_HEADED=1` to debug. Both modes use the same persistent profile, fingerprint, and timings |
-| Scroll | 200-600px steps, 1.5-4s pauses, 15% chance of back-scroll |
-| Typing | 35-90ms per keystroke, 4% chance of mid-word pause (300-700ms), no paste |
-| Mouse clicks | ±3px jitter around target coordinate |
-
-#### Detection signals → halt + write PAUSED + screenshot
-
-- Restriction banner detected on `/feed/` (8 signal phrases scanned)
-- Redirect to `/checkpoint/` or `/uas/login` after action
-- Captcha / verify-identity modal
-- Comment editor not found after Comment-trigger click
-- Submit button not found or stays disabled after typing
-- Submit redirect (URL changed to checkpoint/login)
-- Editor still contains the comment text after submit (publish silently failed)
+Full source: [`src/scan.ts`](src/scan.ts) (Layer 1), [`src/ai/guardrails.ts`](src/ai/guardrails.ts) (Layer 2), [`src/publish.ts`](src/publish.ts) (Layer 3).
 
 </details>
 
 <details>
 <summary><strong>Account safety</strong> — volume caps and kill switches</summary>
 
-Daily volume caps with phased ramp. The `seen_posts` table and 14-day same-author cooldown prevent the patterns LinkedIn's anti-spam actually penalizes — duplicate text, mass action on the same target, machine-regular intervals.
+LinkedIn's anti-spam systems penalize three patterns: duplicate text, mass action on the same target, and machine-regular intervals. The 14-day same-author cooldown, the per-comment manual approval, and the volume caps below address those directly. They're behavioral, not fingerprint-based.
 
 | Phase | Days since first run | Daily cap | Gap between publishes |
 |---|---|---|---|
@@ -189,21 +210,25 @@ Daily volume caps with phased ramp. The `seen_posts` table and 14-day same-autho
 | Build | 4-7 | 10 | 30-90s |
 | Steady | 8+ | 15 | 30-90s |
 
-**Why these timings:** real engaged users comment 5-10 times in a 10-15 min reading session. Earlier 6-15 min cooldowns made the pattern look mechanical (always a long, regular gap). The new range mimics natural feed-engagement bursts. Daily cap is the actual safety lever.
+**Why those gaps:** real engaged users comment 5-10 times in a 10-15 min reading session. Long, regular cooldowns (e.g. always 6-15 min) look mechanical. The range above mimics natural feed-engagement bursts. The daily cap is the actual safety lever.
 
 #### Kill switches
 
 Any one of these halts both `scan` and `publish`:
 
 ```bash
-LINKEDIN_PAUSE=1 npm run publish        # 1. env var
-touch ~/.linkedin-engage/PAUSED      # 2. flag file (persists across runs)
-                                        # 3. automatic — written when 3 publishes fail
-                                        #    in any 1h window or restriction language
-                                        #    is detected on /feed/
+LINKEDIN_PAUSE=1 npm run publish        # env var (one-shot)
+touch ~/.linkedin-engage/PAUSED         # flag file (persists across runs)
+                                        # automatic — written when 3 publishes fail
+                                        # in any 1h window, or restriction language
+                                        # is detected on /feed/
 ```
 
-To resume after a manual investigation: `rm ~/.linkedin-engage/PAUSED`.
+To resume after manual investigation: `rm ~/.linkedin-engage/PAUSED`.
+
+#### Browser session
+
+The tool uses Playwright's bundled Chromium with a real persistent profile at `~/.linkedin-engage/chrome-profile/`. Your LinkedIn cookies live there and survive across runs. Headless by default so the browser doesn't steal focus; `LINKEDIN_HEADED=1` to watch it for debugging. Typing is 35-90ms per keystroke with 4% mid-word pauses. Scroll uses 200-600px steps and 1.5-4s pauses. Mouse clicks have ±3px jitter. None of this matters as much as the behavioral safeguards above — it's there because there's no reason to ignore the small wins.
 
 </details>
 
@@ -213,15 +238,14 @@ To resume after a manual investigation: `rm ~/.linkedin-engage/PAUSED`.
 | Symptom | What you'll see | Recovery |
 |---|---|---|
 | Not logged into Chrome profile | `Scraped 0 posts. Check ~/Downloads/...png` | Run `npm run setup`, log into LinkedIn in the Playwright Chrome window, close it |
-| LinkedIn shipped new selectors | `(N posts skipped — no URN extractable)` | Open `src/linkedin/feed-scraper.ts`, update selectors against latest DOM |
+| LinkedIn shipped new selectors | `(N posts skipped — no URN extractable)` | Open `src/linkedin/feed-scraper.ts`, update selectors |
 | Submit button stays disabled | `✗ Failed: submit button not found or still disabled after typing` | Likely typing didn't hit the editor — inspect screenshot at `~/Downloads/linkedin-incident-no-submit-button-*.png` |
-| Transient browser hiccup (page/context closed, net::ERR_) | `⚠ Infra error (...) — recovering page and retrying once` | Auto-recovered — `publish.ts` swaps in a fresh page, waits 15-40s, retries once. If the retry still fails, the row is re-set to `approved` so the next `publish` run picks it up |
-| Notion 404 on data source | `Could not find database with ID: <ds_id>` | In Notion, share the DB with your integration via DB → "..." → Connections |
+| Transient browser hiccup | `⚠ Infra error (...) — recovering page and retrying once` | Auto-recovered: `publish.ts` swaps in a fresh page, waits 15-40s, retries once. If retry still fails, row is re-set to `approved` for the next run |
+| Notion 404 on data source | `Could not find database with ID: <ds_id>` | In Notion: DB → `...` → Connections → add the integration |
 | Restriction banner detected | `ACCOUNT PAUSED: <signal>` + exit code 2 | Open the screenshot, log into LinkedIn manually, address the verification, then `rm ~/.linkedin-engage/PAUSED` |
-| Claude usage limit hit | `Usage limit hit. Stopping.` | Wait for subscription quota reset, retry |
-| 3 consecutive publish failures | Auto-PAUSED with reason in flag file | Read flag (`cat ~/.linkedin-engage/PAUSED`), inspect screenshots, address root cause, delete flag |
+| Claude usage limit hit | `Usage limit hit. Stopping.` | Wait for subscription quota reset |
 
-All Playwright incidents save a full-page screenshot to `~/Downloads/linkedin-incident-<reason>-<timestamp>.png` for post-mortem.
+All Playwright incidents save a full-page screenshot to `~/Downloads/linkedin-incident-<reason>-<timestamp>.png`.
 
 </details>
 
@@ -232,23 +256,23 @@ All Playwright incidents save a full-page screenshot to `~/Downloads/linkedin-in
 
 | Field | Type | Used for |
 |---|---|---|
-| `Name` | Title | "<author> — <40 chars>" preview |
+| `Name` | Title | "&lt;author&gt; — &lt;40 chars&gt;" preview |
 | `post_url` | URL | Canonical LinkedIn post URL |
 | `author` | Text | Post author |
 | `post_text` | Text | Original post body |
 | `screenshot` | Files | Optional post screenshot |
 | `draft` | Text | Auto-generated comment |
 | `final_text` | Text | Optional — your edits land here. If blank, `draft` is published |
-| `status` | Select | Options: `pending`, `approved`, `publishing`, `published`, `failed`, `skipped`, `deferred` |
+| `status` | Select | `pending`, `approved`, `publishing`, `published`, `failed`, `skipped`, `deferred` |
 | `reason` | Text | Filled by the tool on skip/fail/defer |
 | `scanned_at` | Date | When the drafter ran |
 | `published_at` | Date | When the comment went live |
 
 #### Share the DB with an integration
 
-1. Create a Notion integration at https://www.notion.so/profile/integrations → copy the secret (this is `NOTION_TOKEN`)
-2. Open your DB → `...` menu → **Connections** → add the integration
-3. Copy the 32-char ID from the DB URL (`https://www.notion.so/<DB_ID>?v=...`) → that's `NOTION_DB_ID`
+1. Create a Notion integration at https://www.notion.so/profile/integrations → copy the secret. That's your `NOTION_TOKEN`.
+2. Open your DB → `...` menu → **Connections** → add the integration.
+3. Copy the 32-char ID from the DB URL (`https://www.notion.so/<DB_ID>?v=...`). That's your `NOTION_DB_ID`.
 
 #### After a successful publish
 
@@ -257,42 +281,40 @@ Status flips to `published`, then the row is **auto-archived** (hidden from defa
 </details>
 
 <details>
-<summary><strong>How it runs under the hood (pseudo-code)</strong></summary>
+<summary><strong>How it runs under the hood</strong></summary>
 
 ```
 npm run scan
-  1. Launch Chromium (real persistent profile, headless by default)
-  2. Navigate to /feed/, wait for [data-testid="mainFeed"]
-  3. Scroll the feed, extract posts via stable selectors:
-         - listitem wrapper:  [role="listitem"]
-         - author name:       aria-label="Open control menu for post by <name>"
-         - post body:         [data-testid="expandable-text-box"]
-         - activity URN:      protobuf-decoded from "componentkey" attribute
-  4. Close Chrome (release profile lock for publish later)
-  5. Filter eligible posts (Layer 1 above)
-  6. ONE batched `claude -p` call drafts all eligible in a single JSON array
-  7. Validate each draft against guardrails (Layer 2 above)
+  1. Launch Chromium with the real persistent profile (headless by default)
+  2. Navigate to /feed/, wait for the main feed to render
+  3. Scroll, extract posts via stable selectors (listitem wrapper, aria-label
+     author name, expandable-text-box body, protobuf-decoded activity URN)
+  4. Close Chrome (release profile lock so publish can use it later)
+  5. Apply Layer 1 filters to every scraped post
+  6. ONE batched `claude -p` call drafts all eligible posts as JSON array
+  7. Validate each draft against Layer 2 guardrails
   8. Push survivors to Notion as status=pending
 
-[ approve drafts in Notion (UI directly, or via Claude app + Notion MCP) ]
+[ you approve drafts in Notion ]
 
 npm run publish
-  1. Pre-flight account health check (load /feed/, scan for restriction language)
+  1. Pre-flight account health check (Layer 3 starts here)
   2. For each approved row, with cooldown gaps:
-         re-check guardrails →
-         navigate to post URL →
-         click Like (if not already pressed) →
-         wait, type comment 35-90ms/key →
-         click submit, verify editor cleared
+        re-check guardrails →
+        navigate to post URL →
+        click Like (if not already liked) →
+        wait, type comment at 35-90ms/keystroke →
+        click submit, verify editor cleared
   3. On success: status=published, archive Notion row, record SQLite history
-  4. On transient infra error (page/context closed, net::ERR_): recover live page, retry once with 15-40s cooldown; if still fails, re-set row to `approved` for the next run
+  4. On transient infra error: swap page, wait 15-40s, retry once;
+     if still failing, re-set row to `approved` for next run
   5. On 3 consecutive failures in 1h: write PAUSED flag, halt
 ```
 
-**Efficiency wins:**
-- Single batched `claude -p` call (voice profile sent once, not N times) — ~5x token reduction
-- Chrome closed before drafting — no idle browser during the slow Claude call
-- Cooldowns tuned to real human-engagement cadence (45-120s ramp, not 6-15 min)
+**Why this is cheap:**
+- Single batched `claude -p` call per scan (voice profile sent once, not N times) — ~5x fewer tokens
+- Chrome closed during the slow Claude call — no idle browser
+- Cooldowns tuned to real human-engagement cadence, not paranoid long gaps
 
 </details>
 
@@ -306,7 +328,7 @@ linkedin-engage/
 │   ├── scan.ts                          # entrypoint: scrape + batch-draft + queue
 │   ├── publish.ts                       # entrypoint: read approved + like + publish + archive
 │   ├── status.ts                        # entrypoint: counts + paused state
-│   ├── setup.ts                         # entrypoint: verifies Notion / claude CLI / voice / Chrome
+│   ├── setup.ts                         # entrypoint: verifies Notion / Claude CLI / voice / Chrome
 │   ├── voice-init.ts                    # entrypoint: 15-question voice wizard
 │   ├── draft-test.ts                    # offline drafter sanity test
 │   ├── config.ts                        # env, paths, phase calc, cooldown config
@@ -334,8 +356,8 @@ linkedin-engage/
 | Path | Status | Why |
 |---|---|---|
 | `.env` | gitignored | Holds your Notion token + DB ID |
-| `src/ai/voice-profile.md` | **gitignored** | Personal — generated by `voice:init`, contains your name/role/samples |
-| `src/ai/voice-profile.template.md` | committed | Template + verbatim universal rules; same for everyone |
+| `src/ai/voice-profile.md` | **gitignored** | Personal — generated by `voice:init` |
+| `src/ai/voice-profile.template.md` | committed | Template + universal rules; same for everyone |
 | `chrome-profile/` | gitignored | LinkedIn cookies, persistent browser state |
 | `state.db` | gitignored | SQLite cache: dedup, daily counter, recent comments |
 | `~/.linkedin-engage/voice-answers.json` | outside repo | Your wizard answers (so you can re-run + iterate) |
@@ -364,7 +386,7 @@ Thin wrapper over the linkedin-engage project at <path-to-repo>.
 - `run` (or no arg) → scan + draft + queue to Notion
 - `post` → publish whatever you approved in Notion
 - `status` → counts, today's published, paused state
-- `setup` → first-time install: verify Notion, claude CLI, log into LinkedIn
+- `setup` → first-time install: verify Notion, Claude CLI, log into LinkedIn
 
 ## Execution
 | Arg | Command |
@@ -377,23 +399,42 @@ Thin wrapper over the linkedin-engage project at <path-to-repo>.
 Stream output. Use a 10-minute timeout for `run` and `post`.
 
 ## After completion
-- For `run`: scraped/queued/skipped counts + Notion DB URL (https://www.notion.so/<your_db_id>) for review
-- For `post`: published/failed/deferred counts. If any `failed` or `deferred`, surface why
-- For `status`: phase, today's count vs cap, paused state, queue counts
+- `run`: scraped/queued/skipped counts + Notion DB URL for review
+- `post`: published/failed/deferred counts. If any failed/deferred, surface why
+- `status`: phase, today's count vs cap, paused state, queue counts
 
 ## Critical: account safety signals
 If output contains `ACCOUNT PAUSED`, `RESTRICTION`, `CAPTCHA`, `LOGIN_REQUIRED`, or exit code 2:
 - DO NOT retry. Halt.
-- Tell the user: "LinkedIn account safety check failed. Open `~/Downloads/linkedin-incident-*.png` to see the modal. After confirming the account is healthy, delete `~/.linkedin-engage/PAUSED` to resume."
+- Tell the user: "LinkedIn safety check failed. Open `~/Downloads/linkedin-incident-*.png`. After confirming the account is healthy, delete `~/.linkedin-engage/PAUSED` to resume."
 ```
 
 After saving, the skill is available as `/linkedin-engage run|post|status|setup`. Restart Claude Code if it doesn't show up.
 
 </details>
 
-## Stack
+## Stack & self-hosting requirements
 
-Node 20+ (TypeScript, ESM via tsx) · Playwright (headless Chromium, `LINKEDIN_HEADED=1` to debug) · `@notionhq/client` · `better-sqlite3` · `claude` CLI for drafting (uses your Claude subscription, no API key needed)
+Node 20+ · TypeScript (ESM via tsx) · Playwright (headless Chromium) · `@notionhq/client` · `better-sqlite3` · `claude` CLI for drafting (uses your existing Claude subscription, no API key needed)
+
+Runs entirely on your laptop. The only outbound calls are to LinkedIn (the comments you approved), Notion (your private DB), and Anthropic (your Claude account).
+
+## FAQ
+
+**Will this get my account banned?**
+That's the honest risk with any third-party tool that touches LinkedIn. This one is built to minimize the patterns LinkedIn's anti-spam actually penalizes: no auto-publish, no duplicate text (every draft is unique), 14-day cooldown on the same author, hard 15/day cap, human-paced typing, real persistent Chrome profile. Read the [disclaimer](#disclaimer) before installing.
+
+**Do my drafts sound like me, or like ChatGPT?**
+The `voice:init` wizard asks you 15 questions including writing samples and what annoys you about LinkedIn. Then a guardrail layer rejects 46 known AI-tell phrases ("curious", "leverage", "game-changer", em-dashes, antithesis structures, etc.) before drafts reach Notion. You can also hand-edit `src/ai/voice-profile.md` directly.
+
+**Where does my data live?**
+Everything is local. LinkedIn cookies in `~/.linkedin-engage/chrome-profile/`. Voice profile in `src/ai/voice-profile.md` (gitignored). Drafts in your private Notion DB. SQLite cache in `~/.linkedin-engage/state.db`. The only thing that leaves your machine is the comment you approved and the prompt to Claude.
+
+**Can I use this for multiple LinkedIn accounts?**
+No. Single-operator, single-profile by design. Running it against accounts you don't own crosses into TOS territory the disclaimer specifically rules out.
+
+**What does it cost to run?**
+Free, if you already pay for Claude (Pro or Max subscription). A scan of ~25 posts costs roughly the same as one Claude conversation since drafting is batched into a single call.
 
 ---
 
@@ -401,10 +442,10 @@ Node 20+ (TypeScript, ESM via tsx) · Playwright (headless Chromium, `LINKEDIN_H
 
 MIT. See [LICENSE](LICENSE).
 
-## Disclaimer
+## <a id="disclaimer"></a>Disclaimer
 
-LinkedIn's [User Agreement §8.2](https://www.linkedin.com/legal/user-agreement) prohibits scraping, automation, and any *"software, devices, scripts, robots, or other means"* interacting with the platform. **This tool does that.** Manual approval and human-paced typing keep detection low, and many people run tools like this for months without issue, but the risk is real and it's on you. Account restrictions, pauses, or bans are not the repo's problem.
+LinkedIn's [User Agreement §8.2](https://www.linkedin.com/legal/user-agreement) restricts automation and scraping. This tool automates parts of your LinkedIn use, so it falls under that restriction. Manual approval and human-paced typing keep the behavioral footprint low, but the risk of restrictions or account action is real and entirely on you.
 
-Use it for **personal engagement on accounts you own.** Not for mass outreach, not for spam, not for managing accounts on behalf of clients without their explicit consent. Provided as-is, no warranty, no support.
+Use only on accounts you personally own. Not for mass outreach. Not for managing other people's accounts. Provided as-is, no warranty, no support.
 
 By cloning, installing, or running this code you accept these terms.
