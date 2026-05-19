@@ -131,6 +131,40 @@ npm run draft:test -- "<paste a real post>"   # sanity check
 
 Re-run `voice:init` anytime — your previous answers preload as defaults so you can iterate fast. The profile is gitignored; it stays on your machine.
 
+<details>
+<summary><strong>The 15 questions (click to expand)</strong></summary>
+
+**Identity**
+
+1. Your full name
+2. Your role / title (e.g., "Founder", "Senior PM", "Indie hacker")
+3. Company name (or leave blank if independent)
+4. One-line bio — how you describe what you do (~10–20 words)
+
+**Voice register**
+
+5. Pick 3 words that describe how you write online (e.g., direct, witty, technical, warm, formal, sarcastic, dry, contrarian, earnest, playful)
+6. Default casing in your writing — `lowercase` / `mixed` / `proper`
+7. Swearing in your comments — `never` / `rare` / `often`
+8. Sarcasm level (1 = earnest, 10 = scorched earth)
+9. Three writers/posters whose tone you'd happily borrow (LinkedIn / X / Substack / books)
+
+**Substance**
+
+10. Top 3 topics you'll comment on most (e.g., "B2B SaaS, GTM strategy, indie founders")
+11. Your unique angle — what perspective do you bring others don't? (e.g., "ex-engineer turned PM", "indie founder shipping weekly")
+12. Paste 2–3 short examples of YOUR actual writing — comments, tweets, paragraphs you're proud of. These anchor the model in real you.
+13. What 3 things annoy you most about typical LinkedIn comments? (these get banned — e.g., "fake humility, name-dropping, calling everything a journey")
+
+**Goals**
+
+14. Why are you commenting? (build network / signal craft / find clients / learn / mix)
+15. Who do you want to attract? Be specific. (e.g., "founders running 10–50 person SaaS", "design directors at agencies")
+
+> Answers persist to `~/.linkedin-engage/voice-answers.json` and preload as defaults on re-run, so iterating on your voice profile is fast.
+
+</details>
+
 ## What this deliberately does not do
 
 Daemon mode. Auto-publish. Cloud hosting. DM outreach. Multi-account management. All deliberately not built — they'd either cost account safety, defeat manual approval, or turn this into a different tool.
