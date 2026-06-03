@@ -2,7 +2,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { listPending, QueueRow } from '../notion/queue.js';
+import { listPending, listApproved, QueueRow } from '../notion/queue.js';
+import { pullVault } from './pull.js';
 
 // Obsidian "dan-brain" vault — LinkedIn comment drafts mirror.
 // Override with LINKEDIN_VAULT_DIR to point at a different Comments folder.
@@ -54,15 +55,17 @@ function addressFor(pageId: string): string {
 
 function noteBody(row: QueueRow, subject: string, scannedAt: string): string {
   const fmTitle = `${row.author} — ${subject}`.replace(/"/g, "'");
+  const status = row.status === 'approved' ? 'approved' : 'pending';
   return `---
 type: linkedin-comment
 title: "${fmTitle}"
-status: pending
+status: ${status}
 scanned_at: ${scannedAt}
 address: ${addressFor(row.pageId)}
+page_id: ${row.pageId}
 author: ${row.author}
 post_url: "${row.postUrl}"
-tags: [linkedin, comment, channel/linkedin, pending, draft]
+tags: [linkedin, comment, channel/linkedin, ${status}, draft]
 ---
 
 # ${row.author} — ${subject}
@@ -96,29 +99,35 @@ tags: [linkedin, comments, index, channel/linkedin]
 
 # LinkedIn Comments Queue
 
-Comment drafts queued for review before publishing. Status flow: \`pending\` → \`approved\` → \`publishing\` → \`published\` (or \`failed\` / \`skipped\` / \`deferred\`).
+**This folder is the control surface.** Drafts land here as \`status: pending\`. To act on one, open its note and edit the \`status:\` field in the frontmatter:
 
-Workflow: scraped post → auto-drafted reply (in Dan's voice via \`/linkedin-engage\`) → manual approval here → published via Playwright. This folder is rebuilt from the live pending queue on every \`/linkedin-engage run\`.
+- \`approved\` → will be published on the next \`/linkedin-engage post\`
+- \`skipped\` → killed, won't publish (drops out of the folder on the next run)
+- leave \`pending\` → ignored for now
 
-## Pending drafts
+You never touch Notion. \`/linkedin-engage post\` reads your \`approved\` notes, publishes them via Playwright, then clears them out. Status flow: \`pending\` → \`approved\` → \`published\` (or \`skipped\`).
+
+## Drafts
 `;
 
   if (rows.length === 0) {
-    return `${header}\n_No pending drafts. Run \`/linkedin-engage\` to scan and queue._\n\n## Workflow\n\nRun \`/linkedin-engage\` to scrape feed → auto-draft new replies → queue here. Approve/redraft/kill in chat. On \`/linkedin-engage post\` Playwright publishes approved drafts.\n\n\n[[Marketing]]\n`;
+    return `${header}\n_No active drafts. Run \`/linkedin-engage\` to scan and queue._\n\n\n[[Marketing]]\n`;
   }
 
   const lines = rows.map(({ row, subject, noteName }) =>
-    `| ${row.author} | ${subject.replace(/\|/g, '/')} | ${scannedAt} | [[${noteName}]] |`,
+    `| ${row.author} | ${subject.replace(/\|/g, '/')} | ${row.status === 'approved' ? '✅ approved' : 'pending'} | [[${noteName}]] |`,
   );
 
   return `${header}
-| Author | Subject | Scanned | Wiki |
-| ------ | ------- | ------- | ---- |
+| Author | Subject | Status | Wiki |
+| ------ | ------- | ------ | ---- |
 ${lines.join('\n')}
 
-## Workflow
+## How to use
 
-Run \`/linkedin-engage\` to scrape feed → auto-draft new replies → queue here. Approve/redraft/kill in chat. On \`/linkedin-engage post\` Playwright publishes approved drafts.
+1. Run \`/linkedin-engage\` to scan + queue new drafts here.
+2. Open notes you like; set \`status: approved\` (or \`status: skipped\` to kill).
+3. Run \`/linkedin-engage post\` — approved notes publish, then leave the folder.
 
 
 [[Marketing]]
@@ -138,9 +147,12 @@ function wipeDraftNotes(dir: string): number {
 }
 
 /**
- * Mirror the live pending Notion queue into the Obsidian vault Comments folder.
- * Wipes all existing draft notes, writes one fresh note per pending draft, and
- * rebuilds the Comments.md index. No-ops with a warning if the vault is missing.
+ * Mirror the live active Notion queue (pending + approved) into the Obsidian vault.
+ *
+ * First pulls any human decisions Dan made in the vault (status edits) back into
+ * Notion so they aren't lost, then wipes and rebuilds the folder from the resulting
+ * active set. Approved notes therefore survive a rebuild and stay marked approved;
+ * killed (skipped) and published notes drop out. No-ops if the vault is missing.
  */
 export async function syncVault(): Promise<{ synced: number; skipped: boolean }> {
   const dir = commentsDir();
@@ -155,15 +167,19 @@ export async function syncVault(): Promise<{ synced: number; skipped: boolean }>
   }
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
+  // Capture Dan's vault-side status edits into Notion before we wipe the folder.
+  await pullVault();
+
   const scannedAt = today();
-  const pending = await listPending();
+  // Active set = still-actionable drafts. Approved come first so they sort to the top.
+  const active = [...await listApproved(), ...await listPending()];
 
   wipeDraftNotes(dir);
 
   const indexRows: Array<{ row: QueueRow; subject: string; noteName: string }> = [];
   const usedNames = new Set<string>();
 
-  for (const row of pending) {
+  for (const row of active) {
     const subject = deriveSubject(row.postText);
     let noteName = sanitizeFilename(`${row.author} — ${subject}`);
     if (!noteName) noteName = sanitizeFilename(row.author) || addressFor(row.pageId);
@@ -178,8 +194,9 @@ export async function syncVault(): Promise<{ synced: number; skipped: boolean }>
 
   writeFileSync(join(dir, INDEX_FILE), buildIndex(indexRows, scannedAt), 'utf8');
 
-  console.log(`Vault: ${pending.length} draft${pending.length === 1 ? '' : 's'} synced to ${dir}.`);
-  return { synced: pending.length, skipped: false };
+  const approvedCount = active.filter(r => r.status === 'approved').length;
+  console.log(`Vault: ${active.length} draft${active.length === 1 ? '' : 's'} synced (${approvedCount} approved) to ${dir}.`);
+  return { synced: active.length, skipped: false };
 }
 
 // Allow standalone invocation: `npm run sync:vault`

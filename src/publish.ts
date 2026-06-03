@@ -4,6 +4,8 @@ import { checkAccountHealth, isPaused, AccountPausedError, writePauseFlag } from
 import { publishComment, likePost, CommentPublishError, AlreadyCommentedError } from './linkedin/commenter.js';
 import { detectMyVanity } from './linkedin/identity.js';
 import { listApproved, markStatus, archivePage } from './notion/queue.js';
+import { pullVault } from './vault/pull.js';
+import { syncVault } from './vault/sync.js';
 import { validateDraft } from './ai/guardrails.js';
 import {
   getFirstRunAt, getDailyPublished, incrementDailyPublished, recordAuthorComment,
@@ -27,9 +29,22 @@ async function main() {
     process.exit(0);
   }
 
+  // The vault is the control surface: pick up any `status: approved` / `skipped`
+  // edits Dan made in the Obsidian notes and reconcile them into the queue first.
+  if (!DRY_RUN) {
+    try {
+      await pullVault();
+    } catch (err) {
+      console.log(`Vault pull skipped: ${(err as Error).message}`);
+    }
+  }
+
   const approved = await listApproved();
-  console.log(`Found ${approved.length} approved drafts in Notion`);
-  if (approved.length === 0) process.exit(0);
+  console.log(`Found ${approved.length} approved drafts (from vault)`);
+  if (approved.length === 0) {
+    console.log('Nothing approved. Set `status: approved` on the notes you want in the vault Comments folder, then run post again.');
+    process.exit(0);
+  }
 
   const ctx = await launch();
   let page = ctx.pages()[0] ?? await ctx.newPage();
@@ -173,6 +188,15 @@ async function main() {
   console.log(`Published: ${publishedCount}`);
   console.log(`Failed: ${failedCount}`);
   console.log(`Deferred: ${deferredCount}`);
+
+  // Refresh the vault so published drafts drop out and the folder reflects what's left.
+  if (!DRY_RUN) {
+    try {
+      await syncVault();
+    } catch (err) {
+      console.log(`Vault resync skipped: ${(err as Error).message}`);
+    }
+  }
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });

@@ -16,6 +16,7 @@
     "kill": "tsx src/kill.ts",
     "good": "tsx src/good.ts",
     "sync:vault": "tsx src/vault/sync.ts",
+    "pull:vault": "tsx src/vault/pull.ts",
     "draft:test": "tsx src/draft-test.ts",
     "voice:init": "tsx src/voice-init.ts",
     "voice": "${EDITOR:-open} src/ai/voice-profile.md",
