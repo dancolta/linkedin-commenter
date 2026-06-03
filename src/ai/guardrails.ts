@@ -1,7 +1,11 @@
 // Banned ANYWHERE in draft (not just opener) — these are LinkedIn cope phrases + corporate sludge
 export const BANNED_PHRASES_ANYWHERE = [
-  // curiosity/agreement
-  'curious',
+  // curiosity/agreement — block the cope variants, but NOT the pointed
+  // "curious how/what you [specific]" close the voice profile recommends.
+  'curious to hear',
+  'curious to know',
+  'curious what others',
+  'curious if anyone',
   'interested to hear',
   'interested to know',
   'wondering if',
@@ -26,6 +30,14 @@ export const BANNED_PHRASES_ANYWHERE = [
   'food for thought',
   'circle back',
   'value-add',
+  // debate-bro tells (warm-contrarian anti-patterns)
+  'hard pass',
+  'this is wrong because',
+  'that\'s just not true',
+  "i'd argue that",
+  'let me play devil',
+  'with all due respect',
+  'respectfully',
 ];
 
 // Banned at the START of a comment — opener crutches
@@ -37,6 +49,38 @@ export const BANNED_OPENERS = [
   // LinkedIn-bro openers
   "i'm excited", 'hot take:', 'hot take ', 'unpopular opinion',
   'plot twist:', 'plot twist ', "here's the thing",
+  // debate-bro openers (warm-contrarian anti-patterns)
+  'actually,', 'actually ', 'disagree.', 'disagree ', 'disagree—',
+  'sorry but', 'sorry, but',
+];
+
+// Fabrication tells — specific personal-event language the drafter has no business inventing.
+// The model has no access to Dan's actual recent life, so any draft that drops a concrete
+// timeframe (last week / last quarter / yesterday / ~N months) attached to a personal verb
+// is presumed invented and rejected. The fix is always to swap to a hedged-generic shape
+// ("the version I keep running into is..."). See FABRICATION GUARD in voice-profile.md.
+const FABRICATION_PATTERNS: RegExp[] = [
+  // Specific dated timeframes anywhere — the strongest signal of invented biography.
+  // Matches "last week/month/quarter/year", "yesterday", "this morning/week/month/quarter",
+  // "a few weeks/months ago", "N days/weeks/months ago" — regardless of subject.
+  // Reason: there's no legitimate use case for these in Dan-voice comments. Even when Dan
+  // wants to reference a recurring pattern, he'd say "the version I keep running into" —
+  // never "last week". If a real Dan-said example contains "last week", it should be saved
+  // to good-drafts.md and referenced via the vibe-injection path, not generalized.
+  /\b(?:last|this)\s+(?:week|month|quarter|year)\b/i,
+  /\byesterday\b/i,
+  /\ba\s+few\s+(?:weeks|months|days)\s+ago\b/i,
+  /\b\d+\s+(?:days?|weeks?|months?)\s+ago\b/i,
+  // Invented duration claims: "for ~N months", "for around N months", "N months in"
+  /\bfor\s+(?:~|around\s+|about\s+)?\d+\s+(?:months?|weeks?|years?)\b/i,
+  /\b~?\d+\s+months?\s+in\b/i,
+  // Named-relationship anecdote shapes — "my friend", "a friend's deal", "my co-founder",
+  // "a client of ours". Any of these implies a specific real person Dan knows.
+  /\b(?:a|my)\s+(?:friend|client|co-founder|cofounder|coworker)(?:'s)?\b/i,
+  // First-person past-tense action verbs without a hedging frame.
+  // Allowed: "I keep running into", "When I run into", "I tend to". Banned: "Tried this",
+  // "Walked X", "Watched X" as bare opener verbs implying a specific event.
+  /^(?:Tried|Walked|Watched|Ran into|Built|Shipped|Tested|Spent)\b/m,
 ];
 
 export interface ValidationResult {
@@ -74,6 +118,13 @@ export function validateDraft(
   if (containsUnicodeEmoji(trimmed)) return { ok: false, reason: 'contains emoji' };
   if (/[—–]/.test(trimmed)) return { ok: false, reason: 'contains em/en dash' };
   if (hasAntithesisStructure(trimmed)) return { ok: false, reason: 'antithesis structure (not X, Y / not X. it\'s Y / less X, more Y)' };
+
+  // Fabrication guard — runs before phrase bans so the reason is specific.
+  for (const re of FABRICATION_PATTERNS) {
+    if (re.test(trimmed)) {
+      return { ok: false, reason: 'fabrication: invented personal event/timeframe (see FABRICATION GUARD)' };
+    }
+  }
 
   const lower = trimmed.toLowerCase();
   for (const banned of BANNED_OPENERS) {

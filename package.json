@@ -14,6 +14,8 @@
     "approve": "tsx src/approve.ts",
     "redraft": "tsx src/redraft.ts",
     "kill": "tsx src/kill.ts",
+    "good": "tsx src/good.ts",
+    "sync:vault": "tsx src/vault/sync.ts",
     "draft:test": "tsx src/draft-test.ts",
     "voice:init": "tsx src/voice-init.ts",
     "voice": "${EDITOR:-open} src/ai/voice-profile.md",

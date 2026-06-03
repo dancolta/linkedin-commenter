@@ -20,10 +20,12 @@ export const SKIP_AUTHORS = parseList('SKIP_AUTHORS');
 export const ONLY_KEYWORDS = parseList('ONLY_KEYWORDS');
 export const SKIP_KEYWORDS = parseList('SKIP_KEYWORDS');
 
+// Daily cap removed per Dan's request 2026-05-28. Pacing (gap) and scan size still enforced.
+// Per-run override via PUBLISH_LIMIT env var (used in publish.ts).
 export const PHASES = [
-  { days: 3, dailyCap: 10, minGapMs: 45_000, maxGapMs: 120_000, maxScan: 20 },
-  { days: 7, dailyCap: 15, minGapMs: 30_000, maxGapMs: 90_000, maxScan: 25 },
-  { days: Infinity, dailyCap: 15, minGapMs: 30_000, maxGapMs: 90_000, maxScan: 30 },
+  { days: 3, dailyCap: Infinity, minGapMs: 45_000, maxGapMs: 120_000, maxScan: 20 },
+  { days: 7, dailyCap: Infinity, minGapMs: 30_000, maxGapMs: 90_000, maxScan: 25 },
+  { days: Infinity, dailyCap: Infinity, minGapMs: 30_000, maxGapMs: 90_000, maxScan: 30 },
 ];
 
 export function currentPhase(firstRunAt: Date): typeof PHASES[number] {

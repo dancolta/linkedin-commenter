@@ -7,6 +7,7 @@ import { UsageLimitError } from './ai/drafter.js';
 import { runDraftPipeline } from './ai/pipeline.js';
 import { detectEnglish } from './ai/language.js';
 import { createPending, listOpenAuthors } from './notion/queue.js';
+import { syncVault } from './vault/sync.js';
 import {
   isPostSeen, markPostSeen, commentedAuthorRecently, getRecentComments, getFirstRunAt,
 } from './cache/sqlite.js';
@@ -36,13 +37,57 @@ async function main() {
   let posts: ScrapedPost[] = [];
   let eligible: ScrapedPost[] = [];
   try {
-    posts = await scrapeFeed(page, phase.maxScan);
+    const scanOverride = parseInt(process.env.MAX_SCAN ?? '', 10);
+    const scanCap = Number.isFinite(scanOverride) && scanOverride > 0 ? scanOverride : phase.maxScan;
+    posts = await scrapeFeed(page, scanCap);
     counters.scraped = posts.length;
-    console.log(`Scraped ${posts.length} posts.`);
+    console.log(`Scraped ${posts.length} posts from feed.`);
 
     if (posts.length === 0) {
       console.log('No posts scraped. Check ~/Downloads/linkedin-incident-*.png for screenshot.');
       return;
+    }
+
+    // Phase 0b: profile-walk for priority authors.
+    // The feed alone won't reliably surface all 20 priority creators in a single scan,
+    // so we actively visit a randomized subset of their profiles and pick up posts ≤1 day old.
+    // Pacing + cap is set conservatively: 10 profiles per scan, 45-120s between visits,
+    // randomized order so the same authors aren't walked in the same sequence daily.
+    // Set PRIORITY_PROFILES_PER_SCAN=0 to disable; PRIORITY_PROFILES_PER_SCAN=N to override.
+    const profileBudget = parseInt(process.env.PRIORITY_PROFILES_PER_SCAN ?? '10', 10);
+    if (profileBudget > 0) {
+      const { PRIORITY_PROFILES } = await import('./priority-authors.js');
+      const { scrapeAuthorProfile, shuffle } = await import('./linkedin/profile-scraper.js');
+      const walkable = PRIORITY_PROFILES.filter(p => p.slug);
+      const order = shuffle(walkable).slice(0, profileBudget);
+      console.log(`Profile-walk: visiting ${order.length} priority author profile${order.length === 1 ? '' : 's'} (${walkable.length - order.length} held back, will cycle next scan).`);
+      const knownUrns = new Set(posts.map(p => p.postUrl));
+      let added = 0;
+      for (const { name, slug } of order) {
+        try {
+          const found = await scrapeAuthorProfile(page, slug!, { maxPosts: 1, maxAgeDays: 1 });
+          for (const post of found) {
+            if (knownUrns.has(post.postUrl)) continue;
+            knownUrns.add(post.postUrl);
+            posts.push(post);
+            added++;
+            console.log(`  + ${name}: ${post.text.slice(0, 60)}...`);
+          }
+          if (found.length === 0) {
+            console.log(`  · ${name}: no fresh post (≤1 day) on profile`);
+          }
+        } catch (err) {
+          // LOGIN_REQUIRED and similar safety errors bubble up through profile-scraper.ts.
+          // We treat it the same as the feed-scrape safety path: abort the whole scan.
+          if ((err as Error).message?.includes('LOGIN_REQUIRED')) {
+            throw new AccountPausedError('LOGIN_REQUIRED on profile-walk');
+          }
+          console.log(`  ✗ ${name}: profile-walk failed (${(err as Error).message?.slice(0, 80)})`);
+        }
+        await sleep(jitter(45_000, 120_000)); // human pacing between profile visits
+      }
+      console.log(`Profile-walk done: +${added} posts. Total candidate posts: ${posts.length}.`);
+      counters.scraped = posts.length; // refresh counter to include profile-walk
     }
 
     // Identity is mandatory — without it, we cannot enforce the manual-comment guard.
@@ -95,6 +140,11 @@ async function main() {
       }
     }
     counters.eligible = eligible.length;
+    // Sort priority authors to the front so they're drafted/queued first.
+    const { isPriorityAuthor } = await import('./priority-authors.js');
+    eligible.sort((a, b) => Number(isPriorityAuthor(b.author)) - Number(isPriorityAuthor(a.author)));
+    const priorityHits = eligible.filter(p => isPriorityAuthor(p.author)).length;
+    if (priorityHits > 0) console.log(`Priority authors in this batch: ${priorityHits} (sorted to front).`);
     console.log(`Eligible after dedupe checks: ${eligible.length}. Closing Chrome.`);
   } catch (err) {
     if (err instanceof AccountPausedError) {
@@ -109,11 +159,18 @@ async function main() {
   }
 
   if (eligible.length === 0) {
-    console.log('\n--- Summary ---');
-    console.log(`Scraped: ${counters.scraped}, Eligible: 0 (all filtered)`);
-    if (Object.keys(skipReasons).length) {
-      for (const [r, c] of Object.entries(skipReasons)) console.log(`  ${c}× ${r}`);
-    }
+    printSummary(counters, skipReasons);
+    return;
+  }
+
+  // Escape hatch: when DUMP_ELIGIBLE is set, dump eligible posts to JSON and exit
+  // before invoking the `claude -p` subprocess. Used when running scan from inside
+  // a Claude Code session (where the subprocess 401s) — caller drafts externally.
+  if (process.env.DUMP_ELIGIBLE) {
+    const fs = await import('node:fs');
+    fs.writeFileSync(process.env.DUMP_ELIGIBLE, JSON.stringify(eligible, null, 2));
+    console.log(`\nDumped ${eligible.length} eligible posts to ${process.env.DUMP_ELIGIBLE}`);
+    printSummary(counters, skipReasons);
     return;
   }
 
@@ -173,19 +230,51 @@ async function main() {
     }
   }
 
-  console.log('\n--- Summary ---');
-  console.log(`Scraped: ${counters.scraped}`);
-  console.log(`Eligible (passed filters): ${counters.eligible}`);
-  console.log(`Substantive drafts: ${counters.drafted}`);
-  console.log(`Queued to Notion: ${counters.queued}`);
-  console.log(`Rejected by guardrails: ${counters.rejected}`);
-  console.log(`Filtered/skipped: ${counters.skipped}`);
-  if (Object.keys(skipReasons).length) {
-    for (const [r, c] of Object.entries(skipReasons)) console.log(`  ${c}× ${r}`);
-  }
+  printSummary(counters, skipReasons);
   if (counters.queued > 0) {
     const dbSlug = NOTION_DB_ID.replace(/-/g, '');
     console.log(`\nReview & approve in Notion: https://www.notion.so/${dbSlug}`);
+  }
+
+  // Mirror the live pending queue into the Obsidian vault (wipe + rebuild).
+  // Never let a vault hiccup fail the scan.
+  if (!DRY_RUN) {
+    try {
+      await syncVault();
+    } catch (err) {
+      console.log(`Vault sync skipped: ${(err as Error).message}`);
+    }
+  }
+}
+
+type Counters = { scraped: number; eligible: number; drafted: number; queued: number; skipped: number; rejected: number };
+
+function printSummary(c: Counters, skipReasons: Record<string, number>) {
+  const rows: [string, number | string][] = [
+    ['Scanned', c.scraped],
+    ['Skipped (filtered)', c.skipped],
+    ['Passed filters', c.eligible],
+    ['Substantive drafts', c.drafted],
+    ['Rejected by guardrails/QC', c.rejected],
+    ['Queued to Notion', c.queued],
+  ];
+  const labelW = Math.max(...rows.map(([l]) => l.length));
+  const valW = Math.max(...rows.map(([, v]) => String(v).length), 5);
+  const line = `+-${'-'.repeat(labelW)}-+-${'-'.repeat(valW)}-+`;
+  console.log('\n--- Scan Summary ---');
+  console.log(line);
+  console.log(`| ${'Metric'.padEnd(labelW)} | ${'Count'.padStart(valW)} |`);
+  console.log(line);
+  for (const [label, val] of rows) {
+    console.log(`| ${label.padEnd(labelW)} | ${String(val).padStart(valW)} |`);
+  }
+  console.log(line);
+
+  if (Object.keys(skipReasons).length) {
+    console.log('\nSkip breakdown:');
+    const reasons = Object.entries(skipReasons).sort((a, b) => b[1] - a[1]);
+    const rW = Math.max(...reasons.map(([r]) => r.length));
+    for (const [r, n] of reasons) console.log(`  ${String(n).padStart(3)} × ${r.padEnd(rW)}`);
   }
 }
 

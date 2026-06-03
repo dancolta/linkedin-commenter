@@ -85,12 +85,21 @@ export async function setDraft(pageId: string, draft: string): Promise<void> {
 
 export async function listOpenAuthors(): Promise<Set<string>> {
   const out = new Set<string>();
-  for (const status of ['pending', 'approved', 'publishing'] as const) {
+  // Active states: always block re-queueing the same author.
+  const activeStatuses = ['pending', 'approved', 'publishing'] as const;
+  // Terminal states: block re-queueing if the row was created within the last 14 days.
+  // 'failed' matters because a failed publish often succeeded on LinkedIn anyway
+  // (LI returns errors post-comment), and 'published' / 'skipped' / 'deferred'
+  // mean the author was already addressed recently.
+  const terminalStatuses = ['published', 'failed', 'skipped', 'deferred'] as const;
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+
+  const collect = async (filter: any) => {
     let cursor: string | undefined;
     do {
       const res: any = await notion.databases.query({
         database_id: NOTION_DB_ID,
-        filter: { property: 'status', select: { equals: status } },
+        filter,
         start_cursor: cursor,
       });
       for (const page of res.results) {
@@ -99,6 +108,18 @@ export async function listOpenAuthors(): Promise<Set<string>> {
       }
       cursor = res.has_more ? res.next_cursor : undefined;
     } while (cursor);
+  };
+
+  for (const status of activeStatuses) {
+    await collect({ property: 'status', select: { equals: status } });
+  }
+  for (const status of terminalStatuses) {
+    await collect({
+      and: [
+        { property: 'status', select: { equals: status } },
+        { timestamp: 'created_time', created_time: { on_or_after: fourteenDaysAgo } },
+      ],
+    });
   }
   return out;
 }
@@ -107,7 +128,16 @@ export async function markStatus(pageId: string, status: QueueStatus, extras?: {
   const props: any = { status: { select: { name: status } } };
   if (extras?.reason) props.reason = { rich_text: [{ text: { content: extras.reason.slice(0, 500) } }] };
   if (extras?.publishedAt) props.published_at = { date: { start: extras.publishedAt.toISOString() } };
-  await notion.pages.update({ page_id: pageId, properties: props });
+  try {
+    await notion.pages.update({ page_id: pageId, properties: props });
+  } catch (err: any) {
+    if (err?.code === 'validation_error' && /reason is not a property/i.test(err?.body || err?.message || '')) {
+      delete props.reason;
+      await notion.pages.update({ page_id: pageId, properties: props });
+    } else {
+      throw err;
+    }
+  }
 }
 
 export async function archivePage(pageId: string): Promise<void> {

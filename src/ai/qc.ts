@@ -8,6 +8,10 @@ const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const VOICE_PROFILE = readFileSync(join(__dirname, 'voice-profile.md'), 'utf8');
 
+const CLEAN_ENV = Object.fromEntries(
+  Object.entries(process.env).filter(([k]) => !/^(ANTHROPIC_|CLAUDE_|CLAUDECODE)/.test(k))
+);
+
 export class QCError extends Error {}
 export class QCUsageLimitError extends Error {}
 
@@ -102,7 +106,7 @@ No prose, no markdown, no code fences. Example shape:
     const res = await execFileAsync(
       'claude',
       ['-p', prompt, '--output-format', 'json', '--model', 'claude-sonnet-4-6'],
-      { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, timeout: 180_000 }
+      { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, timeout: 180_000, env: CLEAN_ENV }
     );
     stdout = res.stdout;
   } catch (err: any) {

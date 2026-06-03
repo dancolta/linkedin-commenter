@@ -30,16 +30,49 @@ export async function scrapeFeed(page: Page, max: number): Promise<ScrapedPost[]
   const perCallItemBudget = 6; // cap URN-extraction work per scroll, prevents page meltdown
 
   while (posts.length < max && scrolls < maxScrolls) {
-    const found: any[] = (await page.evaluate(`(async (budget) => {
+    const probe: any = (await page.evaluate(`(async (budget) => {
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
       function extractData(item) {
-        const ctrlMenu = item.querySelector('[aria-label^="Open control menu for post by "]');
-        const hideBtn = item.querySelector('[aria-label^="Hide post by "]');
-        const aria = (ctrlMenu && ctrlMenu.getAttribute('aria-label')) || (hideBtn && hideBtn.getAttribute('aria-label')) || '';
+        // Locale-agnostic author extraction via aria-label pattern matching.
+        // Matches phrases like:
+        //   EN: "Open control menu for post by NAME" / "Hide post by NAME"
+        //   ES: "Abrir el menú de controles para la publicación de NAME" / "Ocultar la publicación de NAME"
+        //   FR: "Ouvrir le menu de contrôle de la publication de NAME"
+        // Strategy: find any aria-label containing "post by " | "publicación de " | "publication de "
+        // and extract everything after that marker.
         let author = '';
-        const m = aria.match(/^(?:Open control menu for post by|Hide post by)\\s+(.+?)$/);
-        if (m) author = m[1].replace(/^[^\\p{L}\\p{N}]+/u, '').trim();
+        const markers = [
+          { re: /\\bpost by\\s+(.+)$/i, group: 1 },
+          { re: /\\bpublicación de\\s+(.+)$/i, group: 1 },
+          { re: /\\bpublicaci[oó]n de\\s+(.+)$/i, group: 1 },
+          { re: /\\bpublication de\\s+(.+)$/i, group: 1 },
+          { re: /\\bBeitrag von\\s+(.+)$/i, group: 1 },
+          { re: /\\bpost di\\s+(.+)$/i, group: 1 },
+        ];
+        const ariaEls = item.querySelectorAll('[aria-label]');
+        outer: for (const el of ariaEls) {
+          const lbl = el.getAttribute('aria-label') || '';
+          for (const m of markers) {
+            const mm = lbl.match(m.re);
+            if (mm) {
+              author = mm[m.group].trim();
+              // Strip trailing role markers like " profile" if any
+              break outer;
+            }
+          }
+        }
+        // Fallback: derive from innerText head — first non-empty line after "Publicación en el feed" / "Feed post"
+        if (!author) {
+          const head = (item.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean).slice(0, 4);
+          // skip generic role labels
+          const skipRx = /^(Publicación en el feed|Feed post|Promocionado|Promoted|Sponsored|Patrocinado)$/i;
+          for (const line of head) {
+            if (skipRx.test(line)) continue;
+            if (line.length > 1 && line.length < 80 && !/^\\d/.test(line)) { author = line; break; }
+          }
+        }
+        author = author.replace(/^[^\\p{L}\\p{N}]+/u, '').trim();
 
         const textBox = item.querySelector('[data-testid="expandable-text-box"]');
         const text = textBox ? (textBox.innerText || textBox.textContent || '').trim() : '';
@@ -97,9 +130,10 @@ export async function scrapeFeed(page: Page, max: number): Promise<ScrapedPost[]
           urnAttempts++;
           const buttons = item.querySelectorAll('button');
           let commentBtn = null;
+          const commentLabels = ['Comment', 'Comentar', 'Commenter', 'Kommentieren', 'Commenta'];
           for (const b of buttons) {
             const lbl = (b.getAttribute('aria-label') || b.textContent || '').trim();
-            if (lbl === 'Comment') { commentBtn = b; break; }
+            if (commentLabels.includes(lbl)) { commentBtn = b; break; }
           }
           if (commentBtn) {
             try {
@@ -131,8 +165,9 @@ export async function scrapeFeed(page: Page, max: number): Promise<ScrapedPost[]
 
         out.push({ urn: data.urn, author: data.author, text: data.text, ageDays: data.ageDays, commentCount: data.commentCount, isJobOrPoll: data.isJobOrPoll });
       }
-      return out;
-    })(${perCallItemBudget})`)) as any[];
+      return { out };
+    })(${perCallItemBudget})`)) as any;
+    const found: any[] = probe.out || [];
 
     for (const p of found) {
       if (p.skip === 'no-urn') { postsWithoutUrn++; continue; }

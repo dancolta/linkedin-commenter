@@ -17,8 +17,10 @@ async function main() {
 
   const phase = currentPhase(getFirstRunAt());
   const alreadyToday = getDailyPublished();
-  const remaining = Math.max(0, phase.dailyCap - alreadyToday);
-  console.log(`Daily cap: ${phase.dailyCap}, published today: ${alreadyToday}, remaining: ${remaining}`);
+  const perRunLimit = process.env.PUBLISH_LIMIT ? parseInt(process.env.PUBLISH_LIMIT, 10) : Infinity;
+  const capRemaining = Math.max(0, phase.dailyCap - alreadyToday);
+  const remaining = Math.min(capRemaining, perRunLimit);
+  console.log(`Daily cap: ${phase.dailyCap}, published today: ${alreadyToday}, per-run limit: ${perRunLimit}, remaining: ${remaining}`);
 
   if (remaining === 0) {
     console.log('Daily cap reached. Exiting without action.');
