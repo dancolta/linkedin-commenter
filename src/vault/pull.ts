@@ -17,7 +17,7 @@ interface NoteState {
 }
 
 /** Minimal frontmatter reader for the simple `key: value` blocks sync.ts writes. */
-function parseFrontmatter(md: string): Record<string, string> {
+export function parseFrontmatter(md: string): Record<string, string> {
   const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!m) return {};
   const out: Record<string, string> = {};

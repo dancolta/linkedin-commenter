@@ -5,7 +5,7 @@ import { publishComment, likePost, CommentPublishError, AlreadyCommentedError } 
 import { detectMyVanity } from './linkedin/identity.js';
 import { listApproved, markStatus, archivePage } from './notion/queue.js';
 import { pullVault } from './vault/pull.js';
-import { syncVault } from './vault/sync.js';
+import { syncVault, removePublishedNote } from './vault/sync.js';
 import { validateDraft } from './ai/guardrails.js';
 import {
   getFirstRunAt, getDailyPublished, incrementDailyPublished, recordAuthorComment,
@@ -119,6 +119,7 @@ async function main() {
         recordAuthorComment(row.author);
         incrementDailyPublished();
         publishedCount++;
+        try { removePublishedNote({ pageId: row.pageId, postUrl: row.postUrl }); } catch { /* never block */ }
         continue;
       }
 
@@ -145,6 +146,8 @@ async function main() {
         recordAuthorComment(row.author);
         incrementDailyPublished();
         publishedCount++;
+        // Live vault update: drop this note from Obsidian the moment it's posted.
+        try { removePublishedNote({ pageId: row.pageId, postUrl: row.postUrl }); } catch { /* never block publishing */ }
         console.log(`  ✓ Published + archived${result.liked ? ' (liked)' : ` (no like: ${result.likeReason})`}`);
         clearRecentFailures();
       } catch (err) {

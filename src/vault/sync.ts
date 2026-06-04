@@ -1,9 +1,9 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { listPending, listApproved, QueueRow } from '../notion/queue.js';
-import { pullVault } from './pull.js';
+import { pullVault, parseFrontmatter } from './pull.js';
 
 // Obsidian "dan-brain" vault — LinkedIn comment drafts mirror.
 // Override with LINKEDIN_VAULT_DIR to point at a different Comments folder.
@@ -87,7 +87,9 @@ ${row.postText.trim()}
 `;
 }
 
-function buildIndex(rows: Array<{ row: QueueRow; subject: string; noteName: string }>, scannedAt: string): string {
+interface IndexRow { author: string; subject: string; status: string; noteName: string; }
+
+function buildIndex(rows: IndexRow[], scannedAt: string): string {
   const header = `---
 type: index
 title: "LinkedIn Comments"
@@ -114,8 +116,8 @@ You never touch Notion. \`/linkedin-engage post\` reads your \`approved\` notes,
     return `${header}\n_No active drafts. Run \`/linkedin-engage\` to scan and queue._\n\n\n[[Marketing]]\n`;
   }
 
-  const lines = rows.map(({ row, subject, noteName }) =>
-    `| ${row.author} | ${subject.replace(/\|/g, '/')} | ${row.status === 'approved' ? '✅ approved' : 'pending'} | [[${noteName}]] |`,
+  const lines = rows.map(({ author, subject, status, noteName }) =>
+    `| ${author} | ${subject.replace(/\|/g, '/')} | ${status === 'approved' ? '✅ approved' : 'pending'} | [[${noteName}]] |`,
   );
 
   return `${header}
@@ -176,7 +178,7 @@ export async function syncVault(): Promise<{ synced: number; skipped: boolean }>
 
   wipeDraftNotes(dir);
 
-  const indexRows: Array<{ row: QueueRow; subject: string; noteName: string }> = [];
+  const indexRows: IndexRow[] = [];
   const usedNames = new Set<string>();
 
   for (const row of active) {
@@ -189,7 +191,7 @@ export async function syncVault(): Promise<{ synced: number; skipped: boolean }>
     usedNames.add(unique);
 
     writeFileSync(join(dir, `${unique}.md`), noteBody(row, subject, scannedAt), 'utf8');
-    indexRows.push({ row, subject, noteName: unique });
+    indexRows.push({ author: row.author, subject, status: row.status, noteName: unique });
   }
 
   writeFileSync(join(dir, INDEX_FILE), buildIndex(indexRows, scannedAt), 'utf8');
@@ -197,6 +199,46 @@ export async function syncVault(): Promise<{ synced: number; skipped: boolean }>
   const approvedCount = active.filter(r => r.status === 'approved').length;
   console.log(`Vault: ${active.length} draft${active.length === 1 ? '' : 's'} synced (${approvedCount} approved) to ${dir}.`);
   return { synced: active.length, skipped: false };
+}
+
+/** Rebuild Comments.md purely from the notes currently on disk (no Notion call). */
+export function rebuildIndexFromDisk(dir: string): void {
+  const rows: IndexRow[] = [];
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith('.md') || name === INDEX_FILE) continue;
+    const fm = parseFrontmatter(readFileSync(join(dir, name), 'utf8'));
+    if ((fm.type ?? '') !== 'linkedin-comment') continue;
+    const title = fm.title ?? name.replace(/\.md$/, '');
+    const subject = title.includes(' — ') ? title.split(' — ').slice(1).join(' — ') : title;
+    rows.push({
+      author: fm.author ?? '',
+      subject,
+      status: (fm.status ?? 'pending').toLowerCase(),
+      noteName: name.replace(/\.md$/, ''),
+    });
+  }
+  rows.sort((a, b) => Number(b.status === 'approved') - Number(a.status === 'approved'));
+  writeFileSync(join(dir, INDEX_FILE), buildIndex(rows, today()), 'utf8');
+}
+
+/**
+ * Live update: a draft just got published — remove its note from the vault folder
+ * and rebuild the index immediately so Obsidian reflects it in real time. Matches
+ * on page_id (falls back to post_url). Safe no-op if the vault/note is missing.
+ */
+export function removePublishedNote(opts: { pageId?: string; postUrl?: string }): boolean {
+  const dir = commentsDir();
+  if (!existsSync(dir)) return false;
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith('.md') || name === INDEX_FILE) continue;
+    const fm = parseFrontmatter(readFileSync(join(dir, name), 'utf8'));
+    const match = (opts.pageId && fm.page_id === opts.pageId) || (opts.postUrl && fm.post_url === opts.postUrl);
+    if (!match) continue;
+    rmSync(join(dir, name), { force: true });
+    rebuildIndexFromDisk(dir);
+    return true;
+  }
+  return false;
 }
 
 // Allow standalone invocation: `npm run sync:vault`
