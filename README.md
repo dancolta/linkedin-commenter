@@ -472,3 +472,7 @@ LinkedIn's [User Agreement §8.2](https://www.linkedin.com/legal/user-agreement)
 Use only on accounts you personally own. Not for mass outreach. Not for managing other people's accounts. Provided as-is, no warranty, no support.
 
 By cloning, installing, or running this code you accept these terms.
+
+---
+
+> Built by [NodeSparks](https://www.nodesparks.com) — [custom automation that replaces recurring SaaS](https://www.nodesparks.com/services/ai-automation-agency), operator-built and human-in-the-loop.
