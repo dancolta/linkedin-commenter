@@ -6,17 +6,17 @@ export class CommentPublishError extends Error {}
 export class AlreadyCommentedError extends Error {}
 
 export async function likePost(page: Page): Promise<{ liked: boolean; reason?: string }> {
-  // Find the post-level Like button. Comment-level Like buttons have aria-label
-  // that includes "comment" — exclude those.
-  const candidates = await page.$$('button[aria-label]');
+  // LinkedIn's post-level reaction toggle has aria-label "Reaction button state: Like"
+  // (already liked) or "Reaction button state: no reaction" (not liked yet) — it does
+  // NOT use "aria-pressed". Comment-level like buttons use a different aria-label
+  // ("Like" alone, or containing "comment"), so anchoring on "Reaction button state:"
+  // scopes this to the post itself.
+  const candidates = await page.$$('button[aria-label^="Reaction button state"]');
   for (const btn of candidates) {
-    const aria = (await btn.getAttribute('aria-label'))?.toLowerCase() ?? '';
-    if (!/^(react like|like)\b/.test(aria)) continue;
-    if (aria.includes('comment')) continue;
+    const aria = (await btn.getAttribute('aria-label')) ?? '';
     if (!(await btn.isVisible().catch(() => false))) continue;
 
-    const pressed = await btn.evaluate((el: any) => el.getAttribute('aria-pressed') === 'true').catch(() => false);
-    if (pressed) return { liked: false, reason: 'already liked' };
+    if (/reaction button state:\s*like$/i.test(aria)) return { liked: false, reason: 'already liked' };
 
     await btn.click().catch(() => {});
     await sleep(jitter(700, 1400));
@@ -38,6 +38,16 @@ const SUBMIT_SELECTORS = [
   'button.comments-comment-box__submit-button--cr:not([disabled])',
   'button.comments-comment-box__submit-button:not([disabled])',
   'button[data-control-name="comment.post"]:not([disabled])',
+  // LinkedIn's newer comment box ships hashed/atomized class names (no stable
+  // class or data-control-name), so fall back to the button's visible label.
+  // It only renders once text is typed, so this can't match the count/trigger
+  // buttons that also say "Comment" elsewhere on the page. :text-is() matches
+  // against the innermost element wrapping the text (often a child <span>,
+  // not the <button> itself) so it misses here — has-text() checks the whole
+  // subtree; findEnabledSubmit() re-verifies disabled/visible state itself.
+  'button:has-text("Comment")',
+  'button:has-text("Post")',
+  'button:has-text("Reply")',
 ];
 
 const TRIGGER_SELECTORS = [
