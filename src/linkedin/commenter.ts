@@ -20,6 +20,13 @@ export async function likePost(page: Page): Promise<{ liked: boolean; reason?: s
 
     await btn.click().catch(() => {});
     await sleep(jitter(700, 1400));
+    // Clicking the reaction button opens LinkedIn's reaction-picker tooltip
+    // (love/celebrate/support/etc, rendered in a floating-ui-portal). It can
+    // linger positioned over nearby controls (e.g. the comment submit button)
+    // and intercept their clicks. Move the mouse away and dismiss it.
+    await page.mouse.move(10, 10).catch(() => {});
+    await page.keyboard.press('Escape').catch(() => {});
+    await sleep(jitter(300, 600));
     return { liked: true };
   }
   return { liked: false, reason: 'like button not found' };
@@ -195,7 +202,18 @@ export async function publishComment(page: Page, postUrl: string, comment: strin
     throw new CommentPublishError('submit button not found or still disabled after typing');
   }
 
-  await submit.click();
+  try {
+    await submit.click({ timeout: 10_000 });
+  } catch {
+    // A stray overlay (reaction-picker tooltip, toast, etc.) may still be
+    // intercepting the point. Dismiss and force the click through directly
+    // on the button — safe here since we've already resolved the exact
+    // enabled submit element via findEnabledSubmit().
+    await page.mouse.move(10, 10).catch(() => {});
+    await page.keyboard.press('Escape').catch(() => {});
+    await sleep(jitter(300, 600));
+    await submit.click({ force: true });
+  }
   await sleep(jitter(2500, 4500));
 
   const url = page.url();

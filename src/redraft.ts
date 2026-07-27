@@ -1,4 +1,4 @@
-import { getPostText, setDraft } from './notion/queue.js';
+import { getPostText, setDraft } from './queue.js';
 import { resolveSingleId } from './review-cache.js';
 import { draftBatch } from './ai/drafter.js';
 import { validateDraft } from './ai/guardrails.js';
@@ -17,7 +17,7 @@ const pageId = resolveSingleId(id);
 const { author, postText, oldDraft } = await getPostText(pageId);
 
 if (!author || !postText) {
-  console.error(`#${id}: missing author or post_text on the Notion row.`);
+  console.error(`#${id}: missing author or post_text on the queue row.`);
   process.exit(1);
 }
 
@@ -53,4 +53,4 @@ if (!guardrail.ok) {
 
 await setDraft(pageId, raw);
 console.log(`NEW: ${raw}`);
-console.log(`Updated #${id} in Notion.`);
+console.log(`Updated #${id}.`);

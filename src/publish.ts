@@ -3,7 +3,7 @@ import { launch, sleep, jitter } from './linkedin/browser.js';
 import { checkAccountHealth, isPaused, AccountPausedError, writePauseFlag } from './linkedin/safety-check.js';
 import { publishComment, likePost, CommentPublishError, AlreadyCommentedError } from './linkedin/commenter.js';
 import { detectMyVanity } from './linkedin/identity.js';
-import { listApproved, markStatus, archivePage } from './notion/queue.js';
+import { listApproved, markStatus, archivePage } from './queue.js';
 import { pullVault } from './vault/pull.js';
 import { syncVault, removePublishedNote } from './vault/sync.js';
 import { validateDraft } from './ai/guardrails.js';
@@ -11,7 +11,7 @@ import {
   getFirstRunAt, getDailyPublished, incrementDailyPublished, recordAuthorComment,
   recordPublishedComment, getRecentComments, commentedAuthorRecently, recordFailure, clearRecentFailures,
 } from './cache/sqlite.js';
-import { currentPhase, DRY_RUN, PAUSED_ENV } from './config.js';
+import { currentPhase, DRY_RUN, PAUSED_ENV, SKIP_AUTHORS } from './config.js';
 
 async function main() {
   if (PAUSED_ENV) { console.log('LINKEDIN_PAUSE=1 — exiting'); process.exit(0); }
@@ -95,6 +95,17 @@ async function main() {
       }
 
       const text = (row.finalText && row.finalText.trim()) || row.draft;
+
+      // Hard safety net: SKIP_AUTHORS is enforced at scan time, but a draft
+      // can still reach 'approved' status after being added to the list
+      // (e.g. a stale/re-approved row). Never let a blacklisted author's
+      // draft actually publish, no matter how it got into the approved queue.
+      const authorKey = row.author.toLowerCase();
+      if (SKIP_AUTHORS.length && SKIP_AUTHORS.some(a => authorKey.includes(a))) {
+        await markStatus(row.pageId, 'skipped', { reason: 'author on SKIP_AUTHORS list (blocked at publish time)' });
+        console.log(`  ⊘ Blocked: ${row.author} is on SKIP_AUTHORS — refusing to publish`);
+        continue;
+      }
 
       if (commentedAuthorRecently(row.author, 14)) {
         await markStatus(row.pageId, 'skipped', { reason: 'commented on this author within 14 days' });

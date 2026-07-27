@@ -1,4 +1,4 @@
-import { setDraft } from './notion/queue.js';
+import { setDraft } from './queue.js';
 import { readCache } from './review-cache.js';
 
 const cache = readCache();

@@ -10,8 +10,6 @@ export const PAUSED_FLAG = join(STATE_DIR, 'PAUSED');
 
 if (!existsSync(STATE_DIR)) mkdirSync(STATE_DIR, { recursive: true });
 
-export const NOTION_TOKEN = required('NOTION_TOKEN');
-export const NOTION_DB_ID = required('NOTION_DB_ID');
 export const DRY_RUN = process.env.DRY_RUN === '1';
 export const PAUSED_ENV = process.env.LINKEDIN_PAUSE === '1';
 

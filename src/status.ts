@@ -1,4 +1,4 @@
-import { countByStatus } from './notion/queue.js';
+import { countByStatus } from './queue.js';
 import { getDailyPublished, getFirstRunAt } from './cache/sqlite.js';
 import { currentPhase } from './config.js';
 import { isPaused } from './linkedin/safety-check.js';
@@ -19,7 +19,7 @@ async function main() {
     console.log(readFileSync(PAUSED_FLAG, 'utf8').trim().split('\n').map(l => `  ${l}`).join('\n'));
   }
 
-  console.log('\nNotion queue:');
+  console.log('\nQueue:');
   try {
     const counts = await countByStatus();
     if (Object.keys(counts).length === 0) console.log('  (empty)');
@@ -27,7 +27,7 @@ async function main() {
       console.log(`  ${status}: ${n}`);
     }
   } catch (err) {
-    console.error(`  Notion error: ${(err as Error).message}`);
+    console.error(`  Queue error: ${(err as Error).message}`);
   }
 }
 

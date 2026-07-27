@@ -5,11 +5,11 @@
 <h1 align="center">linkedin-engage</h1>
 
 <p align="center">
-  <strong>Draft LinkedIn comments in your voice. Approve in Notion. Publish like a human.</strong>
+  <strong>Draft LinkedIn comments in your voice. Approve in your Obsidian vault. Publish like a human.</strong>
 </p>
 
 <p align="center">
-  <em>Every comment requires a human click in Notion before it publishes.<br>
+  <em>Every comment requires a human approval in your vault before it publishes.<br>
   The 15-comments-a-day cap is hardcoded, not a setting.</em>
 </p>
 
@@ -38,9 +38,7 @@
 
 You want to show up consistently in other people's LinkedIn comments. The honest way takes 30-40 minutes of scrolling a day. The "automated" way turns you into a Taplio bot praising someone's Q3 wins.
 
-This tool sits in the middle. **It drafts. You approve. Then it publishes — at human speed, capped at 15/day, never without your click.** If you don't open Notion, nothing ships.
-
-> _Screenshot of the Notion approval queue → `assets/notion-queue.png` (todo)_
+This tool sits in the middle. **It drafts. You approve. Then it publishes — at human speed, capped at 15/day, never without your click.** If you don't open your vault, nothing ships.
 
 ## Who this is for
 
@@ -58,16 +56,14 @@ git clone https://github.com/dancolta/linkedin-engage && cd linkedin-engage
 npm install && npx playwright install chromium
 npm install -g @anthropic-ai/claude-code     # if you don't have it
 
-cp .env.example .env                         # fill NOTION_TOKEN + NOTION_DB_ID
+cp .env.example .env                         # fill LinkedIn/runtime settings
 npm run voice:init                           # 15-question wizard → your voice profile
-npm run setup                                # verifies Notion + Claude CLI + Chrome login
+npm run setup                                # verifies Claude CLI + Chrome login
 
-npm run scan                                 # scrape + draft + queue to Notion
-# approve drafts in Notion (~10-15 min)
+npm run scan                                 # scrape + draft + queue to the vault
+# approve drafts in the vault (set status: approved in each note, ~10-15 min)
 npm run publish                              # like + comment + archive, capped at 15/day
 ```
-
-For the Notion DB you need to create first, see [Notion DB setup](#user-content-notion-db-setup) below.
 
 > Runs headless by default so it doesn't steal focus. Set `LINKEDIN_HEADED=1` to watch the browser (useful for debugging). `setup` always runs headed since you log into LinkedIn manually once.
 
@@ -75,9 +71,9 @@ For the Notion DB you need to create first, see [Notion DB setup](#user-content-
 
 To keep us honest, and to save you the read if this isn't the tool you're looking for:
 
-- **Not auto-comment.** Every comment is approved by you in Notion before it publishes.
+- **Not auto-comment.** Every comment is approved by you in the vault before it publishes.
 - **Not a Taplio / Engage AI replacement.** No AI-ghostwriting your feed. No cloud. No subscription.
-- **Not "set and forget."** If you don't review Notion, nothing ships.
+- **Not "set and forget."** If you don't review the vault, nothing ships.
 - **Not a growth hack.** Hard 15/day cap. No DM blasts. No connection spam. No follower farming. No engagement pods.
 - **Not multi-account.** Single operator. Not built for agencies running 50 client logins.
 - **Not a SaaS.** Runs on your laptop, your Chrome session, your cookies. Nothing leaves your machine except the LinkedIn comments you approved.
@@ -89,7 +85,7 @@ Those are SaaS products: cloud-hosted, subscription-priced, and they hold the pu
 |  | linkedin-engage | Taplio / Engage AI / Aware |
 |---|---|---|
 | Hosting | Your laptop | Their cloud |
-| Approval | Notion queue, you approve every comment | Auto-publish or in-app queue |
+| Approval | Obsidian vault, you approve every comment | Auto-publish or in-app queue |
 | Voice | Generated from your writing samples, runs locally via Claude | Generic tone presets, in-product fine-tune |
 | Price | Free (uses your Claude subscription, no API key) | $39–$149 / month |
 | Daily cap | Hard 15, phased ramp from 5 | Varies, often uncapped |
@@ -192,10 +188,10 @@ A post must pass all three layers to make it to your LinkedIn. The first two run
 | Same author <14 days | SQLite history | Cooldown — looks robotic otherwise |
 | `SKIP_AUTHORS` / `SKIP_KEYWORDS` | env var match | Your blocklist |
 | `ONLY_AUTHORS` / `ONLY_KEYWORDS` | env var miss | Your allowlist filter |
-| Author already pending in Notion | live query | Don't double-queue |
+| Author already pending in the queue | live query | Don't double-queue |
 | Non-English post | language heuristic | <75% Latin chars OR zero English stopwords |
 
-#### Layer 2 — Drafter output validation (after AI, before Notion)
+#### Layer 2 — Drafter output validation (after AI, before queueing)
 
 | Check | Rejects if |
 |---|---|
@@ -264,42 +260,10 @@ The tool uses Playwright's bundled Chromium with a real persistent profile at `~
 | LinkedIn shipped new selectors | `(N posts skipped — no URN extractable)` | Open `src/linkedin/feed-scraper.ts`, update selectors |
 | Submit button stays disabled | `✗ Failed: submit button not found or still disabled after typing` | Likely typing didn't hit the editor — inspect screenshot at `~/Downloads/linkedin-incident-no-submit-button-*.png` |
 | Transient browser hiccup | `⚠ Infra error (...) — recovering page and retrying once` | Auto-recovered: `publish.ts` swaps in a fresh page, waits 15-40s, retries once. If retry still fails, row is re-set to `approved` for the next run |
-| Notion 404 on data source | `Could not find database with ID: <ds_id>` | In Notion: DB → `...` → Connections → add the integration |
 | Restriction banner detected | `ACCOUNT PAUSED: <signal>` + exit code 2 | Open the screenshot, log into LinkedIn manually, address the verification, then `rm ~/.linkedin-engage/PAUSED` |
 | Claude usage limit hit | `Usage limit hit. Stopping.` | Wait for subscription quota reset |
 
 All Playwright incidents save a full-page screenshot to `~/Downloads/linkedin-incident-<reason>-<timestamp>.png`.
-
-</details>
-
-<details id="notion-db-setup">
-<summary><strong>Notion DB setup</strong> — schema + integration share</summary>
-
-#### Field schema (exact names + types — typos cause `object_not_found`)
-
-| Field | Type | Used for |
-|---|---|---|
-| `Name` | Title | "&lt;author&gt; — &lt;40 chars&gt;" preview |
-| `post_url` | URL | Canonical LinkedIn post URL |
-| `author` | Text | Post author |
-| `post_text` | Text | Original post body |
-| `screenshot` | Files | Optional post screenshot |
-| `draft` | Text | Auto-generated comment |
-| `final_text` | Text | Optional — your edits land here. If blank, `draft` is published |
-| `status` | Select | `pending`, `approved`, `publishing`, `published`, `failed`, `skipped`, `deferred` |
-| `reason` | Text | Filled by the tool on skip/fail/defer |
-| `scanned_at` | Date | When the drafter ran |
-| `published_at` | Date | When the comment went live |
-
-#### Share the DB with an integration
-
-1. Create a Notion integration at https://www.notion.so/profile/integrations → copy the secret. That's your `NOTION_TOKEN`.
-2. Open your DB → `...` menu → **Connections** → add the integration.
-3. Copy the 32-char ID from the DB URL (`https://www.notion.so/<DB_ID>?v=...`). That's your `NOTION_DB_ID`.
-
-#### After a successful publish
-
-Status flips to `published`, then the row is **auto-archived** (hidden from default views, recoverable for 30 days via Notion's restore). Keeps your queue clean without losing history.
 
 </details>
 
@@ -316,9 +280,9 @@ npm run scan
   5. Apply Layer 1 filters to every scraped post
   6. ONE batched `claude -p` call drafts all eligible posts as JSON array
   7. Validate each draft against Layer 2 guardrails
-  8. Push survivors to Notion as status=pending
+  8. Insert survivors into the local queue as status=pending
 
-[ you approve drafts in Notion ]
+[ you approve drafts in the vault ]
 
 npm run publish
   1. Pre-flight account health check (Layer 3 starts here)
@@ -328,7 +292,7 @@ npm run publish
         click Like (if not already liked) →
         wait, type comment at 35-90ms/keystroke →
         click submit, verify editor cleared
-  3. On success: status=published, archive Notion row, record SQLite history
+  3. On success: status=published, archive the queue row, record SQLite history
   4. On transient infra error: swap page, wait 15-40s, retry once;
      if still failing, re-set row to `approved` for next run
   5. On 3 consecutive failures in 1h: write PAUSED flag, halt
@@ -351,7 +315,7 @@ linkedin-engage/
 │   ├── scan.ts                          # entrypoint: scrape + batch-draft + queue
 │   ├── publish.ts                       # entrypoint: read approved + like + publish + archive
 │   ├── status.ts                        # entrypoint: counts + paused state
-│   ├── setup.ts                         # entrypoint: verifies Notion / Claude CLI / voice / Chrome
+│   ├── setup.ts                         # entrypoint: verifies Claude CLI / voice / Chrome
 │   ├── voice-init.ts                    # entrypoint: 15-question voice wizard
 │   ├── draft-test.ts                    # offline drafter sanity test
 │   ├── config.ts                        # env, paths, phase calc, cooldown config
@@ -366,9 +330,7 @@ linkedin-engage/
 │   │   ├── feed-scraper.ts              # scroll, URN decoder, extract posts
 │   │   ├── commenter.ts                 # like + clear-draft + type + submit + verify
 │   │   └── safety-check.ts              # restriction detection, paused-flag mgmt
-│   ├── notion/
-│   │   ├── client.ts                    # @notionhq/client wrapper
-│   │   └── queue.ts                     # createPending, listApproved, archivePage
+│   ├── queue.ts                         # SQLite-backed draft queue
 │   ├── cache/sqlite.ts                  # ~/.linkedin-engage/state.db
 │   └── tools/                           # one-off utilities
 └── package.json
@@ -378,7 +340,7 @@ linkedin-engage/
 
 | Path | Status | Why |
 |---|---|---|
-| `.env` | gitignored | Holds your Notion token + DB ID |
+| `.env` | gitignored | Holds LinkedIn/runtime settings (no secrets beyond cookies) |
 | `src/ai/voice-profile.md` | **gitignored** | Personal — generated by `voice:init` |
 | `src/ai/voice-profile.template.md` | committed | Template + universal rules; same for everyone |
 | `chrome-profile/` | gitignored | LinkedIn cookies, persistent browser state |
@@ -398,7 +360,7 @@ mkdir -p ~/.claude/skills/linkedin-engage
 $EDITOR ~/.claude/skills/linkedin-engage/SKILL.md
 ```
 
-Paste this in (replace `<path-to-repo>` and `<your_db_id>`):
+Paste this in (replace `<path-to-repo>`):
 
 ```markdown
 # /linkedin-engage
@@ -406,10 +368,10 @@ Paste this in (replace `<path-to-repo>` and `<your_db_id>`):
 Thin wrapper over the linkedin-engage project at <path-to-repo>.
 
 ## Args
-- `run` (or no arg) → scan + draft + queue to Notion
-- `post` → publish whatever you approved in Notion
+- `run` (or no arg) → scan + draft + queue to the vault
+- `post` → publish whatever you approved in the vault
 - `status` → counts, today's published, paused state
-- `setup` → first-time install: verify Notion, Claude CLI, log into LinkedIn
+- `setup` → first-time install: verify Claude CLI, log into LinkedIn
 
 ## Execution
 | Arg | Command |
@@ -422,7 +384,7 @@ Thin wrapper over the linkedin-engage project at <path-to-repo>.
 Stream output. Use a 10-minute timeout for `run` and `post`.
 
 ## After completion
-- `run`: scraped/queued/skipped counts + Notion DB URL for review
+- `run`: scraped/queued/skipped counts + vault folder for review
 - `post`: published/failed/deferred counts. If any failed/deferred, surface why
 - `status`: phase, today's count vs cap, paused state, queue counts
 
@@ -438,9 +400,9 @@ After saving, the skill is available as `/linkedin-engage run|post|status|setup`
 
 ## Stack & self-hosting requirements
 
-Node 20+ · TypeScript (ESM via tsx) · Playwright (headless Chromium) · `@notionhq/client` · `better-sqlite3` · `claude` CLI for drafting (uses your existing Claude subscription, no API key needed)
+Node 20+ · TypeScript (ESM via tsx) · Playwright (headless Chromium) · `better-sqlite3` · `claude` CLI for drafting (uses your existing Claude subscription, no API key needed)
 
-Runs entirely on your laptop. The only outbound calls are to LinkedIn (the comments you approved), Notion (your private DB), and Anthropic (your Claude account).
+Runs entirely on your laptop. The only outbound calls are to LinkedIn (the comments you approved) and Anthropic (your Claude account).
 
 ## FAQ
 
@@ -448,10 +410,10 @@ Runs entirely on your laptop. The only outbound calls are to LinkedIn (the comme
 That's the honest risk with any third-party tool that touches LinkedIn. This one is built to minimize the patterns LinkedIn's anti-spam actually penalizes: no auto-publish, no duplicate text (every draft is unique), 14-day cooldown on the same author, hard 15/day cap, human-paced typing, real persistent Chrome profile. Read the [disclaimer](#disclaimer) before installing.
 
 **Do my drafts sound like me, or like ChatGPT?**
-The `voice:init` wizard asks you 15 questions including writing samples and what annoys you about LinkedIn. Then a guardrail layer rejects 46 known AI-tell phrases ("curious", "leverage", "game-changer", em-dashes, antithesis structures, etc.) before drafts reach Notion. You can also hand-edit `src/ai/voice-profile.md` directly.
+The `voice:init` wizard asks you 15 questions including writing samples and what annoys you about LinkedIn. Then a guardrail layer rejects 46 known AI-tell phrases ("curious", "leverage", "game-changer", em-dashes, antithesis structures, etc.) before drafts reach the queue. You can also hand-edit `src/ai/voice-profile.md` directly.
 
 **Where does my data live?**
-Everything is local. LinkedIn cookies in `~/.linkedin-engage/chrome-profile/`. Voice profile in `src/ai/voice-profile.md` (gitignored). Drafts in your private Notion DB. SQLite cache in `~/.linkedin-engage/state.db`. The only thing that leaves your machine is the comment you approved and the prompt to Claude.
+Everything is local. LinkedIn cookies in `~/.linkedin-engage/chrome-profile/`. Voice profile in `src/ai/voice-profile.md` (gitignored). Drafts in your Obsidian vault + local SQLite. SQLite cache in `~/.linkedin-engage/state.db`. The only thing that leaves your machine is the comment you approved and the prompt to Claude.
 
 **Can I use this for multiple LinkedIn accounts?**
 No. Single-operator, single-profile by design. Running it against accounts you don't own crosses into TOS territory the disclaimer specifically rules out.

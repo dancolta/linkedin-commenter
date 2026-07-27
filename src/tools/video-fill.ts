@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { STATE_DIR } from '../config.js';
-import { createPending } from '../notion/queue.js';
+import { createPending } from '../queue.js';
 
 interface FakeRow {
   author: string;
@@ -136,7 +136,7 @@ const ROWS: FakeRow[] = [
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const seededIds: string[] = [];
 
-console.log(`Filling Notion DB with ${ROWS.length} rows...`);
+console.log(`Filling queue with ${ROWS.length} rows...`);
 
 for (let i = 0; i < ROWS.length; i++) {
   const r = ROWS[i];

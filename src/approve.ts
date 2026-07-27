@@ -1,4 +1,4 @@
-import { markStatus } from './notion/queue.js';
+import { markStatus, listPending } from './queue.js';
 import { resolveIds } from './review-cache.js';
 
 const arg = process.argv.slice(2).join(' ').trim();
@@ -7,7 +7,13 @@ if (!arg) {
   process.exit(1);
 }
 
-const pageIds = resolveIds(arg);
+// "all" resolves against the live 'pending' set in the queue, not the on-disk
+// review-cache mapping — that cache is a point-in-time snapshot from the last
+// `review` run and never drops IDs that were killed/skipped afterward, so
+// trusting it here would silently re-approve drafts the user already killed.
+const pageIds = arg.trim().toLowerCase() === 'all'
+  ? (await listPending()).map(r => r.pageId)
+  : resolveIds(arg);
 if (pageIds.length === 0) {
   console.log('Nothing to approve.');
   process.exit(0);

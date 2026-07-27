@@ -6,13 +6,13 @@ import { checkIAlreadyCommented } from './linkedin/commenter.js';
 import { UsageLimitError } from './ai/drafter.js';
 import { runDraftPipeline } from './ai/pipeline.js';
 import { detectEnglish } from './ai/language.js';
-import { createPending, listOpenAuthors } from './notion/queue.js';
+import { createPending, listOpenAuthors } from './queue.js';
 import { syncVault } from './vault/sync.js';
 import {
   isPostSeen, markPostSeen, commentedAuthorRecently, getRecentComments, getFirstRunAt,
 } from './cache/sqlite.js';
 import {
-  currentPhase, DRY_RUN, PAUSED_ENV, NOTION_DB_ID,
+  currentPhase, DRY_RUN, PAUSED_ENV,
   ONLY_AUTHORS, SKIP_AUTHORS, ONLY_KEYWORDS, SKIP_KEYWORDS,
 } from './config.js';
 
@@ -116,7 +116,7 @@ async function main() {
       if (SKIP_KEYWORDS.length && SKIP_KEYWORDS.some(k => textKey.includes(k))) { skip('post matches SKIP_KEYWORDS'); continue; }
       if (ONLY_KEYWORDS.length && !ONLY_KEYWORDS.some(k => textKey.includes(k))) { skip('post does not match ONLY_KEYWORDS'); continue; }
       if (inBatchAuthors.has(authorKey)) { skip('duplicate author in this scan'); continue; }
-      if (openAuthors.has(authorKey)) { skip('author already pending/approved in Notion'); continue; }
+      if (openAuthors.has(authorKey)) { skip('author already pending/approved in queue'); continue; }
       const lang = detectEnglish(post.text);
       if (!lang.isEnglish) { skip(`non-English (${lang.reason})`); continue; }
       inBatchAuthors.add(authorKey);
@@ -124,7 +124,7 @@ async function main() {
     }
 
     // Phase 1b: for each remaining post, navigate and verify Dan hasn't manually commented.
-    // This is the strongest guard against double-commenting and runs BEFORE Notion is touched.
+    // This is the strongest guard against double-commenting and runs BEFORE anything is queued.
     if (prefiltered.length > 0) {
       console.log(`\nChecking ${prefiltered.length} eligible post${prefiltered.length === 1 ? '' : 's'} for existing comments by you...`);
       for (const post of prefiltered) {
@@ -193,7 +193,7 @@ async function main() {
   counters.drafted = verdicts.filter(v => v.status === 'queued').length;
   console.log(`Pipeline finished: ${counters.drafted} passed QC, ${verdicts.length - counters.drafted} skipped.`);
 
-  // === Phase 4: queue to Notion ===
+  // === Phase 4: queue drafts ===
   for (let i = 0; i < eligible.length; i++) {
     const post = eligible[i];
     const v = verdicts[i];
@@ -224,16 +224,15 @@ async function main() {
         const tag = v.attempts > 1 ? ` [retry ${v.attempts}]` : '';
         console.log(`  ✓ ${post.author}${tag}: ${trimmed.slice(0, 60)}...`);
       } catch (err) {
-        console.log(`  ✗ Notion error for ${post.author}: ${(err as Error).message}`);
-        skip('notion error');
+        console.log(`  ✗ Queue error for ${post.author}: ${(err as Error).message}`);
+        skip('queue error');
       }
     }
   }
 
   printSummary(counters, skipReasons);
   if (counters.queued > 0) {
-    const dbSlug = NOTION_DB_ID.replace(/-/g, '');
-    console.log(`\nReview & approve in Notion: https://www.notion.so/${dbSlug}`);
+    console.log(`\nReview & approve in the vault: set status: approved / skipped in each note under LinkedIn/Comments.`);
   }
 
   // Mirror the live pending queue into the Obsidian vault (wipe + rebuild).
@@ -256,7 +255,7 @@ function printSummary(c: Counters, skipReasons: Record<string, number>) {
     ['Passed filters', c.eligible],
     ['Substantive drafts', c.drafted],
     ['Rejected by guardrails/QC', c.rejected],
-    ['Queued to Notion', c.queued],
+    ['Queued', c.queued],
   ];
   const labelW = Math.max(...rows.map(([l]) => l.length));
   const valW = Math.max(...rows.map(([, v]) => String(v).length), 5);

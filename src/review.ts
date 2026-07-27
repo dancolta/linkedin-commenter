@@ -1,4 +1,4 @@
-import { listPending } from './notion/queue.js';
+import { listPending } from './queue.js';
 import { writeCache } from './review-cache.js';
 
 const pending = await listPending();

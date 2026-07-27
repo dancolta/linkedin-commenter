@@ -1,4 +1,4 @@
-import { markStatus } from './notion/queue.js';
+import { markStatus } from './queue.js';
 import { resolveIds } from './review-cache.js';
 
 const arg = process.argv.slice(2).join(' ').trim();

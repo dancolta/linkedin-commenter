@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { STATE_DIR } from '../config.js';
-import { archivePage } from '../notion/queue.js';
+import { archivePage } from '../queue.js';
 
 const trackingPath = join(STATE_DIR, 'video-fill-ids.json');
 

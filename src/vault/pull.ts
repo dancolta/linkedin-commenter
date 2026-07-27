@@ -1,11 +1,11 @@
 import { join } from 'node:path';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { listPending, listApproved, markStatus, QueueStatus } from '../notion/queue.js';
+import { listPending, listApproved, markStatus, QueueStatus } from '../queue.js';
 import { commentsDir } from './sync.js';
 
 const INDEX_FILE = 'Comments.md';
 
-// Statuses a human can set in a vault note that we propagate into Notion.
+// Statuses a human can set in a vault note that we propagate into the local queue.
 // `skipped` is how Dan kills a draft from the vault.
 const HUMAN_STATUSES = new Set<QueueStatus>(['approved', 'skipped']);
 
@@ -45,11 +45,11 @@ function readNotes(dir: string): NoteState[] {
 }
 
 /**
- * Read human status decisions from the vault notes and push them into Notion.
+ * Read human status decisions from the vault notes and push them into the local queue.
  *
  * The vault is the control surface: Dan sets `status: approved` (publish) or
  * `status: skipped` (kill) in a note's frontmatter. This reconciles those edits
- * into the Notion queue that the publisher reads. Joins on `page_id` when present,
+ * into the local queue that the publisher reads. Joins on `page_id` when present,
  * falling back to `post_url`. Notes already in sync are skipped. No-ops if the
  * vault is missing. Never throws past a single note — a bad note is logged and skipped.
  */
@@ -66,7 +66,7 @@ export async function pullVault(): Promise<{ approved: number; skipped: number; 
   for (const note of readNotes(dir)) {
     if (!HUMAN_STATUSES.has(note.status as QueueStatus)) continue;
     const row = (note.pageId && byPageId.get(note.pageId)) || (note.postUrl && byUrl.get(note.postUrl));
-    if (!row) continue; // already terminal in Notion (published/etc.) or not found
+    if (!row) continue; // already terminal in the queue (published/etc.) or not found
     if (row.status === note.status) { unchanged++; continue; }
     try {
       await markStatus(row.pageId, note.status as QueueStatus);

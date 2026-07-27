@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, appendFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { getPostText } from './notion/queue.js';
+import { getPostText } from './queue.js';
 import { readCache } from './review-cache.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

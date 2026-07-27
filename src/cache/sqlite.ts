@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { SQLITE_PATH, madridMidnightISO } from '../config.js';
 
-const db = new Database(SQLITE_PATH);
+export const db = new Database(SQLITE_PATH);
 db.pragma('journal_mode = WAL');
 
 db.exec(`
@@ -9,6 +9,22 @@ db.exec(`
     key TEXT PRIMARY KEY,
     value TEXT
   );
+  CREATE TABLE IF NOT EXISTS drafts (
+    id TEXT PRIMARY KEY,
+    post_url TEXT,
+    author TEXT,
+    post_text TEXT,
+    draft TEXT,
+    final_text TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    reason TEXT,
+    scanned_at TEXT,
+    published_at TEXT,
+    created_at TEXT NOT NULL,
+    archived INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status, archived);
+  CREATE INDEX IF NOT EXISTS idx_drafts_author ON drafts(author);
   CREATE TABLE IF NOT EXISTS seen_posts (
     post_url TEXT PRIMARY KEY,
     author TEXT,

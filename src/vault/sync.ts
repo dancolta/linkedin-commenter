@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { listPending, listApproved, QueueRow } from '../notion/queue.js';
+import { listPending, listApproved, QueueRow } from '../queue.js';
 import { pullVault, parseFrontmatter } from './pull.js';
 
 // Obsidian "dan-brain" vault — LinkedIn comment drafts mirror.
@@ -46,7 +46,7 @@ function deriveSubject(postText: string): string {
   return (words.length < cleaned.length ? `${words}…` : words).slice(0, 80);
 }
 
-/** Deterministic 6-digit address slug from the Notion page id. */
+/** Deterministic 6-digit address slug from the draft id. */
 function addressFor(pageId: string): string {
   const hex = createHash('sha1').update(pageId).digest('hex').slice(0, 6);
   const n = parseInt(hex, 16) % 1_000_000;
@@ -107,7 +107,7 @@ tags: [linkedin, comments, index, channel/linkedin]
 - \`skipped\` → killed, won't publish (drops out of the folder on the next run)
 - leave \`pending\` → ignored for now
 
-You never touch Notion. \`/linkedin-engage post\` reads your \`approved\` notes, publishes them via Playwright, then clears them out. Status flow: \`pending\` → \`approved\` → \`published\` (or \`skipped\`).
+You never touch any external tool. \`/linkedin-engage post\` reads your \`approved\` notes, publishes them via Playwright, then clears them out. Status flow: \`pending\` → \`approved\` → \`published\` (or \`skipped\`).
 
 ## Drafts
 `;
@@ -149,10 +149,10 @@ function wipeDraftNotes(dir: string): number {
 }
 
 /**
- * Mirror the live active Notion queue (pending + approved) into the Obsidian vault.
+ * Mirror the live active queue (pending + approved) into the Obsidian vault.
  *
  * First pulls any human decisions Dan made in the vault (status edits) back into
- * Notion so they aren't lost, then wipes and rebuilds the folder from the resulting
+ * the queue so they aren't lost, then wipes and rebuilds the folder from the resulting
  * active set. Approved notes therefore survive a rebuild and stay marked approved;
  * killed (skipped) and published notes drop out. No-ops if the vault is missing.
  */
@@ -169,7 +169,7 @@ export async function syncVault(): Promise<{ synced: number; skipped: boolean }>
   }
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-  // Capture Dan's vault-side status edits into Notion before we wipe the folder.
+  // Capture Dan's vault-side status edits into the queue before we wipe the folder.
   await pullVault();
 
   const scannedAt = today();
@@ -201,7 +201,7 @@ export async function syncVault(): Promise<{ synced: number; skipped: boolean }>
   return { synced: active.length, skipped: false };
 }
 
-/** Rebuild Comments.md purely from the notes currently on disk (no Notion call). */
+/** Rebuild Comments.md purely from the notes currently on disk (no queue call). */
 export function rebuildIndexFromDisk(dir: string): void {
   const rows: IndexRow[] = [];
   for (const name of readdirSync(dir)) {
