@@ -13,6 +13,11 @@ if (!existsSync(STATE_DIR)) mkdirSync(STATE_DIR, { recursive: true });
 export const DRY_RUN = process.env.DRY_RUN === '1';
 export const PAUSED_ENV = process.env.LINKEDIN_PAUSE === '1';
 
+// Drafts land pre-approved so "post it" is the only step Dan has to take.
+// The vault is now an opt-OUT surface: delete a note (or set `status: skipped`)
+// to kill that draft. Set LINKEDIN_AUTO_APPROVE=0 to go back to opt-in approval.
+export const AUTO_APPROVE = process.env.LINKEDIN_AUTO_APPROVE !== '0';
+
 export const ONLY_AUTHORS = parseList('ONLY_AUTHORS');
 export const SKIP_AUTHORS = parseList('SKIP_AUTHORS');
 export const ONLY_KEYWORDS = parseList('ONLY_KEYWORDS');

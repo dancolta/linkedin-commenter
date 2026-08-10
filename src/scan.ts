@@ -232,7 +232,7 @@ async function main() {
 
   printSummary(counters, skipReasons);
   if (counters.queued > 0) {
-    console.log(`\nReview & approve in the vault: set status: approved / skipped in each note under LinkedIn/Comments.`);
+    console.log(`\nAll queued drafts are pre-approved. Skim them in LinkedIn/Comments and delete any note you don't want out — everything left publishes on the next post run.`);
   }
 
   // Mirror the live pending queue into the Obsidian vault (wipe + rebuild).

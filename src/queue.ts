@@ -8,6 +8,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { db } from './cache/sqlite.js';
+import { AUTO_APPROVE } from './config.js';
 
 export type QueueStatus = 'pending' | 'approved' | 'publishing' | 'published' | 'failed' | 'skipped' | 'deferred';
 
@@ -48,6 +49,14 @@ function toRow(r: DraftRecord): QueueRow {
   };
 }
 
+/**
+ * Queue a freshly drafted comment.
+ *
+ * Named createPending for API compatibility, but under the default
+ * AUTO_APPROVE=on it lands the draft as `approved` — Dan's flow is "scan, glance,
+ * say post it", not "tick 10 checkboxes first". Killing is the explicit act now:
+ * delete the vault note, set `status: skipped`, or run `npm run kill`.
+ */
 export async function createPending(input: {
   author: string;
   postUrl: string;
@@ -57,10 +66,11 @@ export async function createPending(input: {
 }): Promise<string> {
   const id = randomUUID();
   const now = new Date().toISOString();
+  const status: QueueStatus = AUTO_APPROVE ? 'approved' : 'pending';
   db.prepare(
     `INSERT INTO drafts (id, post_url, author, post_text, draft, status, scanned_at, created_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
-  ).run(id, input.postUrl, input.author, input.postText.slice(0, 4000), input.draft, now, now);
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(id, input.postUrl, input.author, input.postText.slice(0, 4000), input.draft, status, now, now);
   return id;
 }
 

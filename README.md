@@ -38,7 +38,7 @@
 
 You want to show up consistently in other people's LinkedIn comments. The honest way takes 30-40 minutes of scrolling a day. The "automated" way turns you into a Taplio bot praising someone's Q3 wins.
 
-This tool sits in the middle. **It drafts. You approve. Then it publishes — at human speed, capped at 15/day, never without your click.** If you don't open your vault, nothing ships.
+This tool sits in the middle. **It drafts. You veto what you don't want. Then it publishes — at human speed, never without your explicit `post`.** Drafts land pre-approved, so the work is skimming and deleting, not ticking boxes. Nothing ever ships on a timer.
 
 ## Who this is for
 
@@ -60,9 +60,10 @@ cp .env.example .env                         # fill LinkedIn/runtime settings
 npm run voice:init                           # 15-question wizard → your voice profile
 npm run setup                                # verifies Claude CLI + Chrome login
 
-npm run scan                                 # scrape + draft + queue to the vault
-# approve drafts in the vault (set status: approved in each note, ~10-15 min)
-npm run publish                              # like + comment + archive, capped at 15/day
+npm run scan                                 # scrape + draft + queue to the vault (pre-approved)
+# skim the vault, delete any note you don't want out (~3-5 min)
+npm run kill -- "<author name>"              # or veto from the terminal
+npm run publish                              # like + comment + archive everything left
 ```
 
 > Runs headless by default so it doesn't steal focus. Set `LINKEDIN_HEADED=1` to watch the browser (useful for debugging). `setup` always runs headed since you log into LinkedIn manually once.
@@ -71,7 +72,7 @@ npm run publish                              # like + comment + archive, capped 
 
 To keep us honest, and to save you the read if this isn't the tool you're looking for:
 
-- **Not auto-comment.** Every comment is approved by you in the vault before it publishes.
+- **Not auto-comment.** Drafts land pre-approved to save you the clicking, but publishing only ever happens when you run `post`. There is no timer, no daemon, no autonomous mode. Deleting a note from the vault kills that draft for good.
 - **Not a Taplio / Engage AI replacement.** No AI-ghostwriting your feed. No cloud. No subscription.
 - **Not "set and forget."** If you don't review the vault, nothing ships.
 - **Not a growth hack.** Hard 15/day cap. No DM blasts. No connection spam. No follower farming. No engagement pods.
@@ -85,7 +86,7 @@ Those are SaaS products: cloud-hosted, subscription-priced, and they hold the pu
 |  | linkedin-engage | Taplio / Engage AI / Aware |
 |---|---|---|
 | Hosting | Your laptop | Their cloud |
-| Approval | Obsidian vault, you approve every comment | Auto-publish or in-app queue |
+| Approval | Obsidian vault, you veto what you don't want; publishing needs an explicit command | Auto-publish or in-app queue |
 | Voice | Generated from your writing samples, runs locally via Claude | Generic tone presets, in-product fine-tune |
 | Price | Free (uses your Claude subscription, no API key) | $39–$149 / month |
 | Daily cap | Hard 15, phased ramp from 5 | Varies, often uncapped |
@@ -280,9 +281,10 @@ npm run scan
   5. Apply Layer 1 filters to every scraped post
   6. ONE batched `claude -p` call drafts all eligible posts as JSON array
   7. Validate each draft against Layer 2 guardrails
-  8. Insert survivors into the local queue as status=pending
+  8. Insert survivors into the local queue as status=approved (LINKEDIN_AUTO_APPROVE=0 to land them pending instead)
 
-[ you approve drafts in the vault ]
+[ you skim the vault and delete anything you don't want
+  → next pull reads those deletions and kills those rows ]
 
 npm run publish
   1. Pre-flight account health check (Layer 3 starts here)

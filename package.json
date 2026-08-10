@@ -14,6 +14,7 @@
     "approve": "tsx src/approve.ts",
     "redraft": "tsx src/redraft.ts",
     "kill": "tsx src/kill.ts",
+    "remove": "tsx src/kill.ts",
     "good": "tsx src/good.ts",
     "sync:vault": "tsx src/vault/sync.ts",
     "pull:vault": "tsx src/vault/pull.ts",

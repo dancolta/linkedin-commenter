@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createHash } from 'node:crypto';
 import { listPending, listApproved, QueueRow } from '../queue.js';
 import { pullVault, parseFrontmatter } from './pull.js';
+import { readManifest, writeManifest } from './manifest.js';
 
 // Obsidian "dan-brain" vault — LinkedIn comment drafts mirror.
 // Override with LINKEDIN_VAULT_DIR to point at a different Comments folder.
@@ -101,13 +102,13 @@ tags: [linkedin, comments, index, channel/linkedin]
 
 # LinkedIn Comments Queue
 
-**This folder is the control surface.** Drafts land here as \`status: pending\`. To act on one, open its note and edit the \`status:\` field in the frontmatter:
+**This folder is the veto surface.** Drafts land here already \`status: approved\` — say "post it" and every note below goes out. You only need to touch a note to *stop* it:
 
-- \`approved\` → will be published on the next \`/linkedin-engage post\`
-- \`skipped\` → killed, won't publish (drops out of the folder on the next run)
-- leave \`pending\` → ignored for now
+- **delete the note** → killed, won't publish (simplest veto)
+- \`status: skipped\` → same thing, if you'd rather keep the note around
+- leave it alone → publishes on the next \`/linkedin-engage post\`
 
-You never touch any external tool. \`/linkedin-engage post\` reads your \`approved\` notes, publishes them via Playwright, then clears them out. Status flow: \`pending\` → \`approved\` → \`published\` (or \`skipped\`).
+Both vetoes are read back into the queue before anything publishes, so a note you removed can't come back on a later sync. \`/linkedin-engage post\` publishes the survivors via Playwright, then clears them out. Status flow: \`approved\` → \`published\` (or \`skipped\`).
 
 ## Drafts
 `;
@@ -127,9 +128,9 @@ ${lines.join('\n')}
 
 ## How to use
 
-1. Run \`/linkedin-engage\` to scan + queue new drafts here.
-2. Open notes you like; set \`status: approved\` (or \`status: skipped\` to kill).
-3. Run \`/linkedin-engage post\` — approved notes publish, then leave the folder.
+1. Run \`/linkedin-engage\` to scan + queue new drafts here (already approved).
+2. Skim. Delete any note you don't want out (or set \`status: skipped\`).
+3. Run \`/linkedin-engage post\` — everything still here publishes, then leaves the folder.
 
 
 [[Marketing]]
@@ -180,6 +181,9 @@ export async function syncVault(): Promise<{ synced: number; skipped: boolean }>
 
   const indexRows: IndexRow[] = [];
   const usedNames = new Set<string>();
+  // pageId → filename, so the next pull can tell "Dan deleted this note" apart
+  // from "this note was never written".
+  const manifest: Record<string, string> = {};
 
   for (const row of active) {
     const subject = deriveSubject(row.postText);
@@ -192,9 +196,11 @@ export async function syncVault(): Promise<{ synced: number; skipped: boolean }>
 
     writeFileSync(join(dir, `${unique}.md`), noteBody(row, subject, scannedAt), 'utf8');
     indexRows.push({ author: row.author, subject, status: row.status, noteName: unique });
+    manifest[row.pageId] = `${unique}.md`;
   }
 
   writeFileSync(join(dir, INDEX_FILE), buildIndex(indexRows, scannedAt), 'utf8');
+  writeManifest(manifest);
 
   const approvedCount = active.filter(r => r.status === 'approved').length;
   console.log(`Vault: ${active.length} draft${active.length === 1 ? '' : 's'} synced (${approvedCount} approved) to ${dir}.`);
@@ -235,6 +241,13 @@ export function removePublishedNote(opts: { pageId?: string; postUrl?: string })
     const match = (opts.pageId && fm.page_id === opts.pageId) || (opts.postUrl && fm.post_url === opts.postUrl);
     if (!match) continue;
     rmSync(join(dir, name), { force: true });
+    // Drop it from the manifest too — we deleted this note, Dan didn't, and the
+    // next pull must not read our own cleanup as a human veto.
+    const m = readManifest();
+    if (m) {
+      const pruned = Object.fromEntries(Object.entries(m.notes).filter(([, f]) => f !== name));
+      writeManifest(pruned);
+    }
     rebuildIndexFromDisk(dir);
     return true;
   }
