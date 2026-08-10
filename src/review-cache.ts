@@ -26,7 +26,7 @@ export function readCache(): ReviewCache | null {
 export function resolveIds(arg: string): string[] {
   const cache = readCache();
   if (!cache) {
-    throw new Error('No review cache found. Run `npm run review` first to list pending drafts.');
+    throw new Error('No review cache found. Run `npm run review` first to list drafts.');
   }
   if (arg.trim().toLowerCase() === 'all') {
     return Object.values(cache.mapping);
@@ -43,14 +43,4 @@ export function resolveIds(arg: string): string[] {
     throw new Error(`Unknown IDs: ${missing.join(', ')}. Re-run \`npm run review\` to refresh the mapping.`);
   }
   return pageIds;
-}
-
-export function resolveSingleId(arg: string): string {
-  const cache = readCache();
-  if (!cache) {
-    throw new Error('No review cache found. Run `npm run review` first.');
-  }
-  const pid = cache.mapping[arg.trim()];
-  if (!pid) throw new Error(`Unknown ID: ${arg}. Re-run \`npm run review\` to refresh.`);
-  return pid;
 }

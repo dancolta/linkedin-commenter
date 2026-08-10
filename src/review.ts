@@ -1,21 +1,23 @@
-import { listPending } from './queue.js';
+import { listPending, listApproved } from './queue.js';
 import { writeCache } from './review-cache.js';
 
-const pending = await listPending();
+// Everything still actionable. Under AUTO_APPROVE (the default) drafts land as
+// `approved`, so a pending-only listing would always print "nothing to review"
+// while ten comments sat one command away from going live.
+const active = [...await listApproved(), ...await listPending()];
 
-if (pending.length === 0) {
-  console.log('No pending drafts. Run `npm run scan` to draft new ones.');
+if (active.length === 0) {
+  console.log('No drafts queued. Run `npm run scan` to draft new ones.');
   process.exit(0);
 }
 
 const mapping: Record<string, string> = {};
-pending.forEach((row, idx) => {
-  const id = String(idx + 1);
-  mapping[id] = row.pageId;
+active.forEach((row, idx) => {
+  mapping[String(idx + 1)] = row.pageId;
 });
 writeCache(mapping);
 
-console.log(`\n${pending.length} pending draft${pending.length === 1 ? '' : 's'}:\n`);
+console.log(`\n${active.length} draft${active.length === 1 ? '' : 's'} queued and ready to publish:\n`);
 
 // Markdown table: # | Lead | Post | Draft
 // Escape pipes and collapse whitespace so cells render in one row.
@@ -24,7 +26,7 @@ const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n).trimEnd
 
 console.log('| # | Lead | Post | Draft | URL |');
 console.log('|---|------|------|-------|-----|');
-pending.forEach((row, idx) => {
+active.forEach((row, idx) => {
   const id = idx + 1;
   const post = truncate(sanitize(row.postText), 220);
   const draft = sanitize((row.finalText || row.draft).trim());
@@ -32,4 +34,4 @@ pending.forEach((row, idx) => {
   console.log(`| ${id} | @${sanitize(row.author)} | ${post} | ${draft} | ${url} |`);
 });
 
-console.log('\nReply with: approve <ids|all>, redraft <id>: <feedback>, kill <id>, or publish');
+console.log('\nReply with: post (sends all), remove <name>, or redraft <name>: <feedback>');
