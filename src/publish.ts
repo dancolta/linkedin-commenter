@@ -1,7 +1,7 @@
 import type { Page } from 'playwright';
 import { launch, sleep, jitter } from './linkedin/browser.js';
 import { checkAccountHealth, isPaused, AccountPausedError, writePauseFlag } from './linkedin/safety-check.js';
-import { publishComment, likePost, CommentPublishError, AlreadyCommentedError } from './linkedin/commenter.js';
+import { publishComment, CommentPublishError, AlreadyCommentedError } from './linkedin/commenter.js';
 import { detectMyVanity } from './linkedin/identity.js';
 import { listApproved, markStatus, archivePage } from './queue.js';
 import { pullVault } from './vault/pull.js';

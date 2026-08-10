@@ -62,7 +62,6 @@ export async function createPending(input: {
   postUrl: string;
   postText: string;
   draft: string;
-  screenshotUrl?: string;   // accepted for API compatibility; not persisted
 }): Promise<string> {
   const id = randomUUID();
   const now = new Date().toISOString();

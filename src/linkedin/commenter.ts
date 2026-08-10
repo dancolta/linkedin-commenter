@@ -5,7 +5,7 @@ import { snapshotIncident } from './safety-check.js';
 export class CommentPublishError extends Error {}
 export class AlreadyCommentedError extends Error {}
 
-export async function likePost(page: Page): Promise<{ liked: boolean; reason?: string }> {
+async function likePost(page: Page): Promise<{ liked: boolean; reason?: string }> {
   // LinkedIn's post-level reaction toggle has aria-label "Reaction button state: Like"
   // (already liked) or "Reaction button state: no reaction" (not liked yet) — it does
   // NOT use "aria-pressed". Comment-level like buttons use a different aria-label
@@ -33,29 +33,18 @@ export async function likePost(page: Page): Promise<{ liked: boolean; reason?: s
 }
 
 const EDITOR_SELECTORS = [
-  'div.ql-editor[contenteditable="true"][data-placeholder*="comment" i]',
-  'div.ql-editor[contenteditable="true"][aria-placeholder*="comment" i]',
-  'div.ql-editor[contenteditable="true"]',
-  'div[contenteditable="true"][data-placeholder*="comment" i]',
+  // LinkedIn migrated the comment box from Quill (div.ql-editor) to
+  // TipTap/ProseMirror. The new editor carries no stable class — every class is
+  // a build-hashed atom — so anchor on the ARIA contract, which survived the
+  // migration. The legacy Quill selectors are kept last as a fallback in case
+  // the old box is still served to some sessions.
+  'div[role="textbox"][contenteditable="true"][aria-label*="comment" i]',
+  'div.tiptap[role="textbox"][contenteditable="true"]',
   'div[role="textbox"][contenteditable="true"]',
+  'div.ql-editor[contenteditable="true"]',
 ];
 
-const SUBMIT_SELECTORS = [
-  'button[class*="comments-comment-box__submit"]:not([disabled])',
-  'button.comments-comment-box__submit-button--cr:not([disabled])',
-  'button.comments-comment-box__submit-button:not([disabled])',
-  'button[data-control-name="comment.post"]:not([disabled])',
-  // LinkedIn's newer comment box ships hashed/atomized class names (no stable
-  // class or data-control-name), so fall back to the button's visible label.
-  // It only renders once text is typed, so this can't match the count/trigger
-  // buttons that also say "Comment" elsewhere on the page. :text-is() matches
-  // against the innermost element wrapping the text (often a child <span>,
-  // not the <button> itself) so it misses here — has-text() checks the whole
-  // subtree; findEnabledSubmit() re-verifies disabled/visible state itself.
-  'button:has-text("Comment")',
-  'button:has-text("Post")',
-  'button:has-text("Reply")',
-];
+const SUBMIT_LABELS = ['comment', 'post', 'reply'];
 
 const TRIGGER_SELECTORS = [
   'button[aria-label="Comment"]:not([aria-pressed])',
@@ -76,17 +65,50 @@ async function findVisibleEditor(page: Page, timeoutMs = 10_000): Promise<Elemen
   return null;
 }
 
-async function findEnabledSubmit(page: Page, timeoutMs = 8_000): Promise<ElementHandle | null> {
+/**
+ * Resolve the comment box's own submit button.
+ *
+ * This MUST be scoped to the editor. A page-wide `button:has-text("Comment")`
+ * lookup matches the post action-bar's "Comment" trigger first (it sits above
+ * the editor in DOM order), and clicking that just re-focuses the box — the
+ * comment is silently never posted. That was the actual publish failure.
+ *
+ * Both buttons render identical hashed classes, so the only stable
+ * discriminator is containment: walk up from the editor and take the first
+ * ancestor whose subtree holds a submit-labelled button. The comment box is a
+ * much tighter subtree than the post, so it is reached long before the
+ * ancestor that also encloses the action bar.
+ */
+async function findEnabledSubmit(page: Page, editor: ElementHandle, timeoutMs = 8_000): Promise<ElementHandle | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    for (const sel of SUBMIT_SELECTORS) {
-      const candidates = await page.$$(sel);
-      for (const c of candidates) {
-        const visible = await c.isVisible().catch(() => false);
-        const disabled = await c.evaluate((el: any) => el.disabled === true || el.getAttribute('aria-disabled') === 'true').catch(() => true);
-        if (visible && !disabled) return c;
+    const handle = await editor.evaluateHandle((ed: Element, labels: string[]) => {
+      // NB: keep every helper here an inline anonymous arrow. A named function
+      // const gets compiled to an esbuild `__name(...)` call, which is not
+      // defined inside the page context and throws at evaluate time.
+      let node: Element | null = ed.parentElement;
+      for (let depth = 0; node && depth < 10; depth++) {
+        const hits = Array.from(node.querySelectorAll('button')).filter(b => {
+          const btn = b as HTMLButtonElement;
+          const text = (btn.innerText || '').trim().toLowerCase();
+          const aria = (btn.getAttribute('aria-label') || '').trim().toLowerCase();
+          if (!labels.includes(text) && !labels.includes(aria)) return false;
+          if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') return false;
+          return btn.offsetParent !== null;
+        });
+        // Stop at the first ancestor that contains exactly one submit-labelled
+        // button. More than one means we have climbed past the comment box and
+        // swept in the action bar too — that is ambiguous, so refuse it.
+        if (hits.length === 1) return hits[0];
+        if (hits.length > 1) return null;
+        node = node.parentElement;
       }
-    }
+      return null;
+    }, SUBMIT_LABELS);
+
+    const el = handle.asElement();
+    if (el) return el;
+    await handle.dispose();
     await sleep(400);
   }
   return null;
@@ -99,6 +121,10 @@ async function expandComments(page: Page, maxClicks = 3): Promise<void> {
       'button[aria-label*="previous comment" i]',
       'button[aria-label*="more comment" i]',
       'button[aria-label*="show more replies" i]',
+      // Hashed-class rebuild: the load-more control now carries no stable class
+      // or aria-label, only its visible label.
+      'button:has-text("Load more comments")',
+      'button:has-text("See previous replies")',
     ].join(','));
     let clicked = false;
     for (const b of buttons) {
@@ -113,9 +139,22 @@ async function expandComments(page: Page, maxClicks = 3): Promise<void> {
   }
 }
 
-export async function hasMyComment(page: Page, vanity: string): Promise<boolean> {
+async function hasMyComment(page: Page, vanity: string): Promise<boolean> {
   await sleep(jitter(800, 1400));
-  await expandComments(page, 3);
+  // The comment list renders lazily and can take several seconds to hydrate.
+  // A single fixed wait is not enough — it reported "no comment by me" on a
+  // post that demonstrably had one. Scroll and re-check across a few rounds,
+  // returning as soon as a match appears.
+  for (let round = 0; round < 4; round++) {
+    await page.evaluate(() => window.scrollBy(0, 900)).catch(() => {});
+    await sleep(jitter(1200, 1800));
+    await expandComments(page, 2);
+    if (await scanForMyComment(page, vanity)) return true;
+  }
+  return false;
+}
+
+async function scanForMyComment(page: Page, vanity: string): Promise<boolean> {
   return await page.evaluate((v: string) => {
     const slug = v.toLowerCase();
     const links = Array.from(document.querySelectorAll('a[href*="/in/"]'));
@@ -123,8 +162,37 @@ export async function hasMyComment(page: Page, vanity: string): Promise<boolean>
       const href = ((a as HTMLAnchorElement).getAttribute('href') || '').toLowerCase();
       const m = href.match(/\/in\/([^/?#]+)/);
       if (!m || m[1] !== slug) continue;
-      const inComment = a.closest('article[class*="comments-comment"], div[class*="comments-comment-item"], div[class*="comments-comment-entity"]');
-      if (inComment) return true;
+
+      // The `comments-comment-*` container classes this used to match were
+      // removed when LinkedIn rebuilt the comment list with hashed classes, so
+      // this always returned false — silently disabling the already-commented
+      // guard. Identify a comment by its structure instead: a comment entry is
+      // the nearest ancestor of the author link that also owns that comment's
+      // own Reply control. The global nav and the left profile card also link
+      // to /in/<me>, but neither sits near a Reply button.
+      let node: Element | null = a.parentElement;
+      for (let depth = 0; node && depth < 8; depth++) {
+        const hasReply = Array.from(node.querySelectorAll('button')).some(b => {
+          const text = (b.innerText || '').trim().toLowerCase();
+          const aria = (b.getAttribute('aria-label') || '').trim().toLowerCase();
+          return text === 'reply' || aria === 'reply' || aria.startsWith('reply to');
+        });
+        if (!hasReply) { node = node.parentElement; continue; }
+
+        // A Reply button alone is not proof. The nav avatar, the left profile
+        // card and the comment box all link to /in/<me>, and climbing far
+        // enough from any of them eventually reaches a container that happens
+        // to enclose some other person's Reply button — measured at 22-25
+        // profile links for those. A real comment entry encloses only its own
+        // author (plus the odd @mention), so require a tight container.
+        const profileLinks = node.querySelectorAll('a[href*="/in/"]').length;
+        if (profileLinks <= 3) return true;
+        // Too wide to be a single comment — this link is the nav avatar, the
+        // profile card or the comment box, not a posted comment. Give up on
+        // THIS link and try the next one; do not conclude "no comment by me",
+        // because the real comment is usually a later link in the list.
+        break;
+      }
     }
     return false;
   }, vanity);
@@ -196,7 +264,7 @@ export async function publishComment(page: Page, postUrl: string, comment: strin
 
   await sleep(jitter(600, 1200));
 
-  const submit = await findEnabledSubmit(page, 8_000);
+  const submit = await findEnabledSubmit(page, editor, 8_000);
   if (!submit) {
     await snapshotIncident(page, 'no-submit-button');
     throw new CommentPublishError('submit button not found or still disabled after typing');
@@ -222,31 +290,41 @@ export async function publishComment(page: Page, postUrl: string, comment: strin
     throw new CommentPublishError(`unexpected redirect after submit: ${url}`);
   }
 
-  // Verify the editor cleared (or our comment is in DOM)
-  const stillTyped = await page.evaluate((commentText: string) => {
-    const editors = document.querySelectorAll('div.ql-editor[contenteditable="true"]');
-    for (const e of editors) {
-      const t = ((e as HTMLElement).innerText || '').trim();
-      if (t === commentText.trim()) return true;
-    }
-    return false;
-  }, comment).catch(() => false);
-  if (stillTyped) {
-    await snapshotIncident(page, 'submit-no-clear');
-    throw new CommentPublishError('comment text still in editor after submit click');
+  // Confirm the comment actually landed.
+  //
+  // This check used to be negative — "is my text still sitting in the editor?"
+  // — against `div.ql-editor`, a selector LinkedIn had already removed. It
+  // matched nothing, so it answered "no" on every run and reported success for
+  // 11 comments that were never posted. Never infer success from the absence of
+  // a failure marker: require positive proof that the comment is in the thread.
+  //
+  // Proof = the comment text rendered somewhere on the page that is NOT the
+  // editor. Text is exact and unique here, so this needs no stable class names.
+  const landed = await page.waitForFunction(
+    (commentText: string) => {
+      const needle = commentText.trim().replace(/\s+/g, ' ');
+      if (!needle) return false;
+      const editors = Array.from(document.querySelectorAll('[role="textbox"][contenteditable="true"], div.ql-editor[contenteditable="true"]'));
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      let hay = '';
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (editors.some(e => e.contains(n))) continue;
+        hay += ' ' + (n.textContent || '');
+      }
+      // LinkedIn truncates long comments behind a "…more" toggle, so match on a
+      // leading slice rather than the whole string.
+      const probe = needle.slice(0, 80);
+      return hay.replace(/\s+/g, ' ').includes(probe);
+    },
+    comment,
+    { timeout: 15_000 },
+  ).then(() => true).catch(() => false);
+
+  if (!landed) {
+    await snapshotIncident(page, 'comment-not-in-thread');
+    throw new CommentPublishError('submit clicked but comment never appeared in the thread');
   }
 
   return { liked: likeResult.liked, likeReason: likeResult.reason };
 }
 
-export async function capturePostScreenshot(page: Page, postUrl: string): Promise<Buffer | null> {
-  try {
-    await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 20_000 });
-    await sleep(jitter(1500, 2500));
-    const article = await page.$('article, div[role="article"]');
-    if (!article) return null;
-    return await article.screenshot({ type: 'png' });
-  } catch {
-    return null;
-  }
-}
