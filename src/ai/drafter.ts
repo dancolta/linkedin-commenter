@@ -31,6 +31,7 @@ function loadGoodDraftsVibe(): string {
 }
 
 export class UsageLimitError extends Error {}
+export class AuthError extends Error {}
 export class DrafterError extends Error {}
 
 export interface PostInput {
@@ -59,7 +60,7 @@ export async function draftBatch(posts: PostInput[]): Promise<string[]> {
       out.push(...drafts);
     } catch (err) {
       // A usage-limit hit is terminal for the whole run — surface it.
-      if (err instanceof UsageLimitError) throw err;
+      if (err instanceof UsageLimitError || err instanceof AuthError) throw err;
       // Otherwise don't let one bad chunk sink the scan: SKIP this group and continue.
       console.warn(`Chunk ${i / CHUNK_SIZE + 1} failed (${(err as Error).message.slice(0, 120)}) — skipping ${chunk.length} posts.`);
       out.push(...new Array(chunk.length).fill('SKIP'));
@@ -111,6 +112,10 @@ Return ONLY a JSON array of ${posts.length} strings (one per post in order). No 
     const blob = `${stderr}\n${err.stdout?.toString?.() ?? ''}`.toLowerCase();
     if (blob.includes('usage limit') || blob.includes('rate limit') || blob.includes('quota')) {
       throw new UsageLimitError('Claude subscription usage limit hit');
+    }
+    if (blob.includes('failed to authenticate') || blob.includes('oauth session expired')
+      || blob.includes('authentication_error') || blob.includes('invalid api key')) {
+      throw new AuthError('claude CLI is not authenticated — run `claude login`');
     }
     throw new DrafterError(`claude CLI failed: ${err.message}\nstderr: ${stderr.slice(0, 2000)}\nstdout: ${(err.stdout?.toString?.() ?? '').slice(0, 2000)}\ncode=${err.code} signal=${err.signal}`);
   }

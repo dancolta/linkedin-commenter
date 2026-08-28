@@ -3,7 +3,7 @@ import { scrapeFeed, ScrapedPost } from './linkedin/feed-scraper.js';
 import { isPaused, AccountPausedError } from './linkedin/safety-check.js';
 import { detectMyVanity } from './linkedin/identity.js';
 import { checkIAlreadyCommented } from './linkedin/commenter.js';
-import { UsageLimitError } from './ai/drafter.js';
+import { UsageLimitError, AuthError } from './ai/drafter.js';
 import { runDraftPipeline } from './ai/pipeline.js';
 import { detectEnglish } from './ai/language.js';
 import { createPending, listOpenAuthors } from './queue.js';
@@ -187,6 +187,11 @@ async function main() {
     if (err instanceof UsageLimitError) {
       console.error('Usage limit hit. All eligible posts deferred.');
       process.exit(3);
+    }
+    if (err instanceof AuthError) {
+      console.error('NOT AUTHENTICATED — the `claude` CLI could not start a session, so nothing was drafted.');
+      console.error('Run `claude login`, then re-run the scan. No posts were marked seen.');
+      process.exit(4);
     }
     throw err;
   }
